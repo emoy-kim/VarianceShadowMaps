@@ -1,0 +1,10 @@
+target_link_libraries(
+     VarianceShadowMaps
+        glad
+        glfw3
+        pthread
+        dl
+        X11
+        freeimage
+        freetype
+)

@@ -66,9 +66,7 @@ private:
    void initialize();
    void writeFrame(const std::string& name) const;
    void writeDepthTexture(const std::string& name) const;
-
    static void printOpenGLInformation();
-
    static void cleanup(GLFWwindow* window);
    static void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods);
    static void cursor(GLFWwindow* window, double xpos, double ypos);

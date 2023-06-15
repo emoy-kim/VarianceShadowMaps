@@ -1,6 +1,6 @@
 #version 460
 
-layout (location = 0) out vec4 final_moments;
+layout (location = 0) out vec2 final_moments;
 
 void main()
 {

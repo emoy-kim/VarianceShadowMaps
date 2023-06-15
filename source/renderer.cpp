@@ -9,7 +9,7 @@ RendererGL::RendererGL() :
    VSMSceneShader( std::make_unique<ShaderGL>() ),
    LightViewDepthShader( std::make_unique<ShaderGL>() ), LightViewMomentsShader( std::make_unique<ShaderGL>() ),
    Lights( std::make_unique<LightGL>() ), Object( std::make_unique<ObjectGL>() ),
-   WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::PCF )
+   WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::VSM )
 {
    Renderer = this;
 
@@ -310,6 +310,7 @@ void RendererGL::setLightViewFrameBuffers()
 
    glCreateFramebuffers( 1, &MomentsFBO );
    glNamedFramebufferTexture( MomentsFBO, GL_COLOR_ATTACHMENT0, MomentsTextureID, 0 );
+   glNamedFramebufferTexture( MomentsFBO, GL_DEPTH_ATTACHMENT, DepthTextureID, 0 );
 
    if (glCheckNamedFramebufferStatus( MomentsFBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
       std::cerr << "MomentsFBO Setup Error\n";
@@ -371,17 +372,18 @@ void RendererGL::drawDepthMapFromLightView() const
 
 void RendererGL::drawMomentsMapFromLightView() const
 {
-   glDisable( GL_DEPTH_TEST );
    glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
    glBindFramebuffer( GL_FRAMEBUFFER, MomentsFBO );
 
    constexpr std::array<GLfloat, 2> clear_moments = { 1.0f, 1.0f };
    glClearNamedFramebufferfv( MomentsFBO, GL_COLOR, 0, &clear_moments[0] );
 
+   constexpr GLfloat one = 1.0f;
+   glClearNamedFramebufferfv( MomentsFBO, GL_DEPTH, 0, &one );
+
    glUseProgram( LightViewMomentsShader->getShaderProgram() );
    drawObject( LightViewMomentsShader.get(), LightCamera.get() );
    drawBoxObject( LightViewMomentsShader.get(), LightCamera.get() );
-   glEnable( GL_DEPTH_TEST );
 }
 
 void RendererGL::drawShadowWithPCF() const

@@ -76,6 +76,10 @@ void RendererGL::initialize()
       std::string(shader_directory_path + "/pcf/scene_shader.vert").c_str(),
       std::string(shader_directory_path + "/pcf/scene_shader.frag").c_str()
    );
+   VSMSceneShader->setShader(
+      std::string(shader_directory_path + "/vsm/scene_shader.vert").c_str(),
+      std::string(shader_directory_path + "/vsm/scene_shader.frag").c_str()
+   );
    LightViewDepthShader->setShader(
       std::string(shader_directory_path + "/light_view_depth_generator.vert").c_str(),
       std::string(shader_directory_path + "/light_view_depth_generator.frag").c_str()
@@ -367,15 +371,17 @@ void RendererGL::drawDepthMapFromLightView() const
 
 void RendererGL::drawMomentsMapFromLightView() const
 {
+   glDisable( GL_DEPTH_TEST );
    glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
    glBindFramebuffer( GL_FRAMEBUFFER, MomentsFBO );
 
-   constexpr std::array<GLfloat, 2> clear_moments = { 0.0f, 0.0f };
+   constexpr std::array<GLfloat, 2> clear_moments = { 1.0f, 1.0f };
    glClearNamedFramebufferfv( MomentsFBO, GL_COLOR, 0, &clear_moments[0] );
 
    glUseProgram( LightViewMomentsShader->getShaderProgram() );
    drawObject( LightViewMomentsShader.get(), LightCamera.get() );
    drawBoxObject( LightViewMomentsShader.get(), LightCamera.get() );
+   glEnable( GL_DEPTH_TEST );
 }
 
 void RendererGL::drawShadowWithPCF() const
@@ -495,7 +501,9 @@ void RendererGL::play()
    setLightViewFrameBuffers();
    TextShader->setTextUniformLocations();
    PCFSceneShader->setSceneUniformLocations( 1 );
-   LightViewDepthShader->setLightViewDepthUniformLocations();
+   VSMSceneShader->setSceneUniformLocations( 1 );
+   LightViewDepthShader->setLightViewUniformLocations();
+   LightViewMomentsShader->setLightViewUniformLocations();
 
    while (!glfwWindowShouldClose( Window )) {
       if (!Pause) render();

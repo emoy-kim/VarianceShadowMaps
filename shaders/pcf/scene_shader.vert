@@ -13,7 +13,6 @@ layout (location = 2) in vec2 v_tex_coord;
 out vec3 position_in_ec;
 out vec3 normal_in_ec;
 out vec2 tex_coord;
-
 out vec4 depth_map_coord;
 
 void main()

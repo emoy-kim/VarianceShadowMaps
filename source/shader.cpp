@@ -126,7 +126,7 @@ void ShaderGL::setTextUniformLocations()
    Location.Texture[0] = glGetUniformLocation( ShaderProgram, "BaseTexture" );
 }
 
-void ShaderGL::setLightViewDepthUniformLocations()
+void ShaderGL::setLightViewUniformLocations()
 {
    setBasicTransformationUniforms();
 }

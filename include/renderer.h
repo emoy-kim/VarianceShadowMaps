@@ -24,7 +24,7 @@ public:
    void play();
 
 private:
-   enum class ALGORITHM_TO_COMPARE { PCF = 0 };
+   enum class ALGORITHM_TO_COMPARE { PCF = 0, VSM };
 
    inline static RendererGL* Renderer = nullptr;
    GLFWwindow* Window;
@@ -34,8 +34,10 @@ private:
    int ShadowMapSize;
    int ActiveLightIndex;
    int PassNum;
-   GLuint FBO;
+   GLuint DepthFBO;
    GLuint DepthTextureID;
+   GLuint MomentsFBO;
+   GLuint MomentsTextureID;
    glm::ivec2 ClickedPoint;
    std::unique_ptr<TextGL> Texter;
    std::unique_ptr<CameraGL> MainCamera;
@@ -43,7 +45,9 @@ private:
    std::unique_ptr<CameraGL> LightCamera;
    std::unique_ptr<ShaderGL> TextShader;
    std::unique_ptr<ShaderGL> PCFSceneShader;
-   std::unique_ptr<ShaderGL> LightViewShader;
+   std::unique_ptr<ShaderGL> VSMSceneShader;
+   std::unique_ptr<ShaderGL> LightViewDepthShader;
+   std::unique_ptr<ShaderGL> LightViewMomentsShader;
    std::unique_ptr<LightGL> Lights;
    std::unique_ptr<ObjectGL> Object;
    std::unique_ptr<ObjectGL> WallObject;
@@ -74,11 +78,13 @@ private:
    void setLights() const;
    void setObject() const;
    void setWallObject() const;
-   void setDepthFrameBuffer();
+   void setLightViewFrameBuffers();
    void drawObject(ShaderGL* shader, CameraGL* camera) const;
    void drawBoxObject(ShaderGL* shader, const CameraGL* camera) const;
    void drawDepthMapFromLightView() const;
+   void drawMomentsMapFromLightView() const;
    void drawShadowWithPCF() const;
+   void drawShadowWithVSM() const;
    void drawText(const std::string& text, glm::vec2 start_position) const;
    void render();
 };

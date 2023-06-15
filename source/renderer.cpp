@@ -2,11 +2,12 @@
 
 RendererGL::RendererGL() :
    Window( nullptr ), Pause( false ), FrameWidth( 1920 ), FrameHeight( 1080 ), ShadowMapSize( 1024 ),
-   ActiveLightIndex( 0 ), PassNum( 3 ), FBO( 0 ), DepthTextureID( 0 ), ClickedPoint( -1, -1 ),
-   Texter( std::make_unique<TextGL>() ),
-   MainCamera( std::make_unique<CameraGL>() ), TextCamera( std::make_unique<CameraGL>() ),
-   LightCamera( std::make_unique<CameraGL>() ), TextShader( std::make_unique<ShaderGL>() ),
-   PCFSceneShader( std::make_unique<ShaderGL>() ), LightViewShader( std::make_unique<ShaderGL>() ),
+   ActiveLightIndex( 0 ), PassNum( 3 ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ), MomentsTextureID( 0 ),
+   ClickedPoint( -1, -1 ), Texter( std::make_unique<TextGL>() ), MainCamera( std::make_unique<CameraGL>() ),
+   TextCamera( std::make_unique<CameraGL>() ), LightCamera( std::make_unique<CameraGL>() ),
+   TextShader( std::make_unique<ShaderGL>() ), PCFSceneShader( std::make_unique<ShaderGL>() ),
+   VSMSceneShader( std::make_unique<ShaderGL>() ),
+   LightViewDepthShader( std::make_unique<ShaderGL>() ), LightViewMomentsShader( std::make_unique<ShaderGL>() ),
    Lights( std::make_unique<LightGL>() ), Object( std::make_unique<ObjectGL>() ),
    WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::PCF )
 {
@@ -19,7 +20,9 @@ RendererGL::RendererGL() :
 RendererGL::~RendererGL()
 {
    if (DepthTextureID != 0) glDeleteTextures( 1, &DepthTextureID );
-   if (FBO != 0) glDeleteFramebuffers( 1, &FBO );
+   if (MomentsTextureID != 0) glDeleteTextures( 1, &MomentsTextureID );
+   if (DepthFBO != 0) glDeleteFramebuffers( 1, &DepthFBO );
+   if (MomentsFBO != 0) glDeleteFramebuffers( 1, &MomentsFBO );
 }
 
 void RendererGL::printOpenGLInformation()
@@ -73,9 +76,13 @@ void RendererGL::initialize()
       std::string(shader_directory_path + "/pcf/scene_shader.vert").c_str(),
       std::string(shader_directory_path + "/pcf/scene_shader.frag").c_str()
    );
-   LightViewShader->setShader(
-      std::string(shader_directory_path + "/light_view_generator.vert").c_str(),
-      std::string(shader_directory_path + "/light_view_generator.frag").c_str()
+   LightViewDepthShader->setShader(
+      std::string(shader_directory_path + "/light_view_depth_generator.vert").c_str(),
+      std::string(shader_directory_path + "/light_view_depth_generator.frag").c_str()
+   );
+   LightViewMomentsShader->setShader(
+      std::string(shader_directory_path + "/light_view_moments_generator.vert").c_str(),
+      std::string(shader_directory_path + "/light_view_moments_generator.frag").c_str()
    );
 }
 
@@ -130,6 +137,12 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
          if (!Renderer->Pause) {
             Renderer->AlgorithmToCompare = ALGORITHM_TO_COMPARE::PCF;
             std::cout << ">> Percentage-Closer Filtering Selected\n";
+         }
+         break;
+      case GLFW_KEY_2:
+         if (!Renderer->Pause) {
+            Renderer->AlgorithmToCompare = ALGORITHM_TO_COMPARE::VSM;
+            std::cout << ">> Variance Shadow Map Selected\n";
          }
          break;
       case GLFW_KEY_UP:
@@ -266,7 +279,7 @@ void RendererGL::setWallObject() const
    WallObject->setDiffuseReflectionColor( { 1.0f, 1.0f, 1.0f, 1.0f } );
 }
 
-void RendererGL::setDepthFrameBuffer()
+void RendererGL::setLightViewFrameBuffers()
 {
    glCreateTextures( GL_TEXTURE_2D, 1, &DepthTextureID );
    glTextureStorage2D( DepthTextureID, 1, GL_DEPTH_COMPONENT32F, ShadowMapSize, ShadowMapSize );
@@ -277,11 +290,25 @@ void RendererGL::setDepthFrameBuffer()
    glTextureParameteri( DepthTextureID, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE );
    glTextureParameteri( DepthTextureID, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL );
 
-   glCreateFramebuffers( 1, &FBO );
-   glNamedFramebufferTexture( FBO, GL_DEPTH_ATTACHMENT, DepthTextureID, 0 );
+   glCreateFramebuffers( 1, &DepthFBO );
+   glNamedFramebufferTexture( DepthFBO, GL_DEPTH_ATTACHMENT, DepthTextureID, 0 );
 
-   if (glCheckNamedFramebufferStatus( FBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
-      std::cerr << "FrameBuffer Setup Error\n";
+   if (glCheckNamedFramebufferStatus( DepthFBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
+      std::cerr << "DepthFBO Setup Error\n";
+   }
+
+   glCreateTextures( GL_TEXTURE_2D, 1, &MomentsTextureID );
+   glTextureStorage2D( MomentsTextureID, 1, GL_RG32F, ShadowMapSize, ShadowMapSize );
+   glTextureParameteri( MomentsTextureID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+   glTextureParameteri( MomentsTextureID, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+   glTextureParameteri( MomentsTextureID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+   glTextureParameteri( MomentsTextureID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+
+   glCreateFramebuffers( 1, &MomentsFBO );
+   glNamedFramebufferTexture( MomentsFBO, GL_COLOR_ATTACHMENT0, MomentsTextureID, 0 );
+
+   if (glCheckNamedFramebufferStatus( MomentsFBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
+      std::cerr << "MomentsFBO Setup Error\n";
    }
 }
 
@@ -325,22 +352,36 @@ void RendererGL::drawBoxObject(ShaderGL* shader, const CameraGL* camera) const
 void RendererGL::drawDepthMapFromLightView() const
 {
    glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
-   glBindFramebuffer( GL_FRAMEBUFFER, FBO );
+   glBindFramebuffer( GL_FRAMEBUFFER, DepthFBO );
 
    constexpr GLfloat one = 1.0f;
-   glClearNamedFramebufferfv( FBO, GL_DEPTH, 0, &one );
+   glClearNamedFramebufferfv( DepthFBO, GL_DEPTH, 0, &one );
    glColorMask( GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE );
 
-   glUseProgram( LightViewShader->getShaderProgram() );
-   drawObject( LightViewShader.get(), LightCamera.get() );
-   drawBoxObject( LightViewShader.get(), LightCamera.get() );
+   glUseProgram( LightViewDepthShader->getShaderProgram() );
+   drawObject( LightViewDepthShader.get(), LightCamera.get() );
+   drawBoxObject( LightViewDepthShader.get(), LightCamera.get() );
+
+   glColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
+}
+
+void RendererGL::drawMomentsMapFromLightView() const
+{
+   glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
+   glBindFramebuffer( GL_FRAMEBUFFER, MomentsFBO );
+
+   constexpr std::array<GLfloat, 2> clear_moments = { 0.0f, 0.0f };
+   glClearNamedFramebufferfv( MomentsFBO, GL_COLOR, 0, &clear_moments[0] );
+
+   glUseProgram( LightViewMomentsShader->getShaderProgram() );
+   drawObject( LightViewMomentsShader.get(), LightCamera.get() );
+   drawBoxObject( LightViewMomentsShader.get(), LightCamera.get() );
 }
 
 void RendererGL::drawShadowWithPCF() const
 {
    glViewport( 0, 0, FrameWidth, FrameHeight );
    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
-   glColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
    glUseProgram( PCFSceneShader->getShaderProgram() );
 
    Lights->transferUniformsToShader( PCFSceneShader.get() );
@@ -352,6 +393,23 @@ void RendererGL::drawShadowWithPCF() const
    glBindTextureUnit( 0, DepthTextureID );
    drawObject( PCFSceneShader.get(), MainCamera.get() );
    drawBoxObject( PCFSceneShader.get(), MainCamera.get() );
+}
+
+void RendererGL::drawShadowWithVSM() const
+{
+   glViewport( 0, 0, FrameWidth, FrameHeight );
+   glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+   glUseProgram( VSMSceneShader->getShaderProgram() );
+
+   Lights->transferUniformsToShader( VSMSceneShader.get() );
+   glUniform1i( VSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
+
+   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   glUniformMatrix4fv( VSMSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
+
+   glBindTextureUnit( 0, MomentsTextureID );
+   drawObject( VSMSceneShader.get(), MainCamera.get() );
+   drawBoxObject( VSMSceneShader.get(), MainCamera.get() );
 }
 
 void RendererGL::drawText(const std::string& text, glm::vec2 start_position) const
@@ -408,10 +466,14 @@ void RendererGL::render()
 
    std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
 
-   drawDepthMapFromLightView();
    switch (AlgorithmToCompare) {
       case ALGORITHM_TO_COMPARE::PCF:
+         drawDepthMapFromLightView();
          drawShadowWithPCF();
+         break;
+      case ALGORITHM_TO_COMPARE::VSM:
+         drawMomentsMapFromLightView();
+         drawShadowWithVSM();
          break;
    }
 
@@ -430,10 +492,10 @@ void RendererGL::play()
    setLights();
    setObject();
    setWallObject();
-   setDepthFrameBuffer();
+   setLightViewFrameBuffers();
    TextShader->setTextUniformLocations();
    PCFSceneShader->setSceneUniformLocations( 1 );
-   LightViewShader->setLightViewUniformLocations();
+   LightViewDepthShader->setLightViewDepthUniformLocations();
 
    while (!glfwWindowShouldClose( Window )) {
       if (!Pause) render();

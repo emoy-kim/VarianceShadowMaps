@@ -6,7 +6,7 @@ RendererGL::RendererGL() :
    ClickedPoint( -1, -1 ), Texter( std::make_unique<TextGL>() ), MainCamera( std::make_unique<CameraGL>() ),
    TextCamera( std::make_unique<CameraGL>() ), LightCamera( std::make_unique<CameraGL>() ),
    TextShader( std::make_unique<ShaderGL>() ), PCFSceneShader( std::make_unique<ShaderGL>() ),
-   VSMSceneShader( std::make_unique<ShaderGL>() ),
+   VSMSceneShader( std::make_unique<ShaderGL>() ), PSVSMSceneShader( std::make_unique<ShaderGL>() ),
    LightViewDepthShader( std::make_unique<ShaderGL>() ), LightViewMomentsShader( std::make_unique<ShaderGL>() ),
    Lights( std::make_unique<LightGL>() ), Object( std::make_unique<ObjectGL>() ),
    WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::PSVSM )
@@ -79,6 +79,10 @@ void RendererGL::initialize()
    VSMSceneShader->setShader(
       std::string(shader_directory_path + "/vsm/scene_shader.vert").c_str(),
       std::string(shader_directory_path + "/vsm/scene_shader.frag").c_str()
+   );
+   PSVSMSceneShader->setShader(
+      std::string(shader_directory_path + "/psvsm/scene_shader.vert").c_str(),
+      std::string(shader_directory_path + "/psvsm/scene_shader.frag").c_str()
    );
    LightViewDepthShader->setShader(
       std::string(shader_directory_path + "/light_view_depth_generator.vert").c_str(),
@@ -363,7 +367,7 @@ void RendererGL::drawDepthMapFromLightView() const
    glColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
 }
 
-void RendererGL::drawMomentsMapFromLightView() const
+void RendererGL::drawMomentsMapFromLightView(const glm::mat4& light_crop_matrix, bool is_pssm) const
 {
    glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
    glBindFramebuffer( GL_FRAMEBUFFER, MomentsFBO );
@@ -375,6 +379,10 @@ void RendererGL::drawMomentsMapFromLightView() const
    glClearNamedFramebufferfv( MomentsFBO, GL_DEPTH, 0, &one );
 
    glUseProgram( LightViewMomentsShader->getShaderProgram() );
+   glUniform1i( LightViewMomentsShader->getLocation( "IsPSSM" ), is_pssm ? 1 : 0 );
+   if (is_pssm) {
+      glUniformMatrix4fv( LightViewMomentsShader->getLocation( "LightCropMatrix" ), 1, GL_FALSE, &light_crop_matrix[0][0] );
+   }
    drawObject( LightViewMomentsShader.get(), LightCamera.get() );
    drawBoxObject( LightViewMomentsShader.get(), LightCamera.get() );
 }
@@ -505,21 +513,21 @@ void RendererGL::drawShadowWithVSM() const
    drawBoxObject( VSMSceneShader.get(), MainCamera.get() );
 }
 
-void RendererGL::drawShadowWithPSVSM() const
+void RendererGL::drawShadowWithPSVSM(const glm::mat4& light_crop_matrix) const
 {
    glViewport( 0, 0, FrameWidth, FrameHeight );
    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
-   glUseProgram( VSMSceneShader->getShaderProgram() );
+   glUseProgram( PSVSMSceneShader->getShaderProgram() );
 
-   Lights->transferUniformsToShader( VSMSceneShader.get() );
-   glUniform1i( VSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
+   Lights->transferUniformsToShader( PSVSMSceneShader.get() );
+   glUniform1i( PSVSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
 
-   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
-   glUniformMatrix4fv( VSMSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
+   const glm::mat4 view_projection = light_crop_matrix * LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   glUniformMatrix4fv( PSVSMSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
 
    glBindTextureUnit( 0, MomentsTextureID );
-   drawObject( VSMSceneShader.get(), MainCamera.get() );
-   drawBoxObject( VSMSceneShader.get(), MainCamera.get() );
+   drawObject( PSVSMSceneShader.get(), MainCamera.get() );
+   drawBoxObject( PSVSMSceneShader.get(), MainCamera.get() );
 }
 
 void RendererGL::drawText(const std::string& text, glm::vec2 start_position) const
@@ -589,8 +597,8 @@ void RendererGL::render()
          splitViewFrustum();
          for (int i = 0; i < SplitNum; ++i) {
             const glm::mat4 crop_matrix = calculateLightCropMatrix( SplitPositions[i], SplitPositions[i + 1] );
-            drawMomentsMapFromLightView();
-            drawShadowWithPSVSM();
+            drawMomentsMapFromLightView( crop_matrix, true );
+            drawShadowWithPSVSM( crop_matrix );
          }
          break;
    }
@@ -614,8 +622,9 @@ void RendererGL::play()
    TextShader->setTextUniformLocations();
    PCFSceneShader->setSceneUniformLocations( 1 );
    VSMSceneShader->setSceneUniformLocations( 1 );
-   LightViewDepthShader->setLightViewUniformLocations();
-   LightViewMomentsShader->setLightViewUniformLocations();
+   PSVSMSceneShader->setSceneUniformLocations( 1 );
+   LightViewDepthShader->setLightViewDepthUniformLocations();
+   LightViewMomentsShader->setLightViewMomentsUniformLocations();
 
    while (!glfwWindowShouldClose( Window )) {
       if (!Pause) render();

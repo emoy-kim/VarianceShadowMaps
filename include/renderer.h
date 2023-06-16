@@ -46,6 +46,7 @@ private:
    std::unique_ptr<ShaderGL> TextShader;
    std::unique_ptr<ShaderGL> PCFSceneShader;
    std::unique_ptr<ShaderGL> VSMSceneShader;
+   std::unique_ptr<ShaderGL> PSVSMSceneShader;
    std::unique_ptr<ShaderGL> LightViewDepthShader;
    std::unique_ptr<ShaderGL> LightViewMomentsShader;
    std::unique_ptr<LightGL> Lights;
@@ -81,12 +82,12 @@ private:
    void drawObject(ShaderGL* shader, CameraGL* camera) const;
    void drawBoxObject(ShaderGL* shader, const CameraGL* camera) const;
    void drawDepthMapFromLightView() const;
-   void drawMomentsMapFromLightView() const;
+   void drawMomentsMapFromLightView(const glm::mat4& light_crop_matrix = glm::mat4(1.0f), bool is_pssm = false) const;
    void splitViewFrustum();
    [[nodiscard]] glm::mat4 calculateLightCropMatrix(float near, float far) const;
    void drawShadowWithPCF() const;
    void drawShadowWithVSM() const;
-   void drawShadowWithPSVSM() const;
+   void drawShadowWithPSVSM(const glm::mat4& light_crop_matrix) const;
    void drawText(const std::string& text, glm::vec2 start_position) const;
    void render();
 };

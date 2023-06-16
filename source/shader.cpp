@@ -126,9 +126,16 @@ void ShaderGL::setTextUniformLocations()
    Location.Texture[0] = glGetUniformLocation( ShaderProgram, "BaseTexture" );
 }
 
-void ShaderGL::setLightViewUniformLocations()
+void ShaderGL::setLightViewDepthUniformLocations()
 {
    setBasicTransformationUniforms();
+}
+
+void ShaderGL::setLightViewMomentsUniformLocations()
+{
+   setBasicTransformationUniforms();
+   addUniformLocation( "LightCropMatrix" );
+   addUniformLocation( "IsPSSM" );
 }
 
 void ShaderGL::setSceneUniformLocations(int light_num)

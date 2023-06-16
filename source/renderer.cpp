@@ -2,14 +2,14 @@
 
 RendererGL::RendererGL() :
    Window( nullptr ), Pause( false ), FrameWidth( 1920 ), FrameHeight( 1080 ), ShadowMapSize( 1024 ),
-   ActiveLightIndex( 0 ), PassNum( 3 ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ), MomentsTextureID( 0 ),
+   ActiveLightIndex( 0 ), SplitNum( 3 ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ), MomentsTextureID( 0 ),
    ClickedPoint( -1, -1 ), Texter( std::make_unique<TextGL>() ), MainCamera( std::make_unique<CameraGL>() ),
    TextCamera( std::make_unique<CameraGL>() ), LightCamera( std::make_unique<CameraGL>() ),
    TextShader( std::make_unique<ShaderGL>() ), PCFSceneShader( std::make_unique<ShaderGL>() ),
    VSMSceneShader( std::make_unique<ShaderGL>() ),
    LightViewDepthShader( std::make_unique<ShaderGL>() ), LightViewMomentsShader( std::make_unique<ShaderGL>() ),
    Lights( std::make_unique<LightGL>() ), Object( std::make_unique<ObjectGL>() ),
-   WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::VSM )
+   WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::PSVSM )
 {
    Renderer = this;
 
@@ -149,17 +149,10 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
             std::cout << ">> Variance Shadow Map Selected\n";
          }
          break;
-      case GLFW_KEY_UP:
+      case GLFW_KEY_3:
          if (!Renderer->Pause) {
-            Renderer->PassNum++;
-            std::cout << ">> Pass Num: " << Renderer->PassNum << std::endl;
-         }
-         break;
-      case GLFW_KEY_DOWN:
-         if (!Renderer->Pause) {
-            Renderer->PassNum--;
-            if (Renderer->PassNum < 2) Renderer->PassNum = 2;
-            std::cout << ">> Pass Num: " << Renderer->PassNum << std::endl;
+            Renderer->AlgorithmToCompare = ALGORITHM_TO_COMPARE::PSVSM;
+            std::cout << ">> Parallel-Split Variance Shadow Map Selected\n";
          }
          break;
       case GLFW_KEY_C:
@@ -386,6 +379,98 @@ void RendererGL::drawMomentsMapFromLightView() const
    drawBoxObject( LightViewMomentsShader.get(), LightCamera.get() );
 }
 
+void RendererGL::splitViewFrustum()
+{
+   constexpr float split_weight = 0.5f;
+   const float n = MainCamera->getNearPlane();
+   const float f = MainCamera->getFarPlane();
+   SplitPositions.resize( SplitNum + 1 );
+   SplitPositions[0] = n;
+   SplitPositions[SplitNum] = f;
+   for (int i = 1; i < SplitNum; ++i) {
+      const auto r = static_cast<float>(i) / static_cast<float>(SplitNum);
+      const float logarithmic_split = n * std::pow( f / n, r );
+      const float uniform_split = n + (f - n) * r;
+      SplitPositions[i] = glm::mix( uniform_split, logarithmic_split, split_weight );
+   }
+
+   const float split_ratio = f / (f - n);
+   int index = 1;
+   for (; index < SplitNum; ++index) {
+      SplitPositions[index - 1] = (SplitPositions[index] - n) * split_ratio;
+   }
+   for (; index <= SplitNum + 1; ++index) {
+      SplitPositions[index - 1] = std::numeric_limits<float>::max();
+   }
+}
+
+glm::mat4 RendererGL::calculateLightCropMatrix(float near, float far) const
+{
+   const glm::mat4& projection_matrix = MainCamera->getProjectionMatrix();
+   const float scale_x = 1.0f / projection_matrix[0][0];
+   const float scale_y = 1.0f / projection_matrix[1][1];
+   const float near_plane_half_width = near * scale_x;
+   const float near_plane_half_height = near * scale_y;
+   const float far_plane_half_width = far * scale_x;
+   const float far_plane_half_height = far * scale_y;
+
+   std::array<glm::vec3, 8> frustum{};
+   frustum[0] = glm::vec3(-near_plane_half_width, -near_plane_half_height, -near);
+   frustum[1] = glm::vec3(-near_plane_half_width, near_plane_half_height, -near);
+   frustum[2] = glm::vec3(near_plane_half_width, near_plane_half_height, -near);
+   frustum[3] = glm::vec3(near_plane_half_width, -near_plane_half_height, -near);
+
+   frustum[4] = glm::vec3(-far_plane_half_width, -far_plane_half_height, -far);
+   frustum[5] = glm::vec3(-far_plane_half_width, far_plane_half_height, -far);
+   frustum[6] = glm::vec3(far_plane_half_width, far_plane_half_height, -far);
+   frustum[7] = glm::vec3(far_plane_half_width, -far_plane_half_height, -far);
+
+   std::array<glm::vec4, 8> ndc_points{};
+   const glm::mat4 to_light =
+      LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix() * glm::inverse( MainCamera->getViewMatrix() );
+   for (int i = 0; i < 8; ++i) {
+      ndc_points[i] = to_light * glm::vec4(frustum[i], 1.0f);
+      ndc_points[i].x /= ndc_points[i].w;
+      ndc_points[i].y /= ndc_points[i].w;
+      ndc_points[i].z /= ndc_points[i].w;
+   }
+
+   auto min_point = glm::vec3(std::numeric_limits<float>::max());
+   auto max_point = glm::vec3(std::numeric_limits<float>::lowest());
+   for (int i = 0; i < 8; ++i) {
+      if (ndc_points[i].x < min_point.x) min_point.x = ndc_points[i].x;
+      if (ndc_points[i].y < min_point.y) min_point.y = ndc_points[i].y;
+      if (ndc_points[i].z < min_point.z) min_point.z = ndc_points[i].z;
+
+      if (ndc_points[i].x > max_point.x) max_point.x = ndc_points[i].x;
+      if (ndc_points[i].y > max_point.y) max_point.y = ndc_points[i].y;
+      if (ndc_points[i].z > max_point.z) max_point.z = ndc_points[i].z;
+   }
+   min_point.z = -1.0f;
+
+   constexpr float min_filter_width = 1.0f;
+   const glm::vec2 half_min_filter_width_in_ndc(
+      min_filter_width / static_cast<float>(FrameWidth),
+      min_filter_width / static_cast<float>(FrameHeight)
+   );
+   min_point.x -= half_min_filter_width_in_ndc.x;
+   min_point.y -= half_min_filter_width_in_ndc.y;
+   max_point.x += half_min_filter_width_in_ndc.x;
+   max_point.y += half_min_filter_width_in_ndc.y;
+
+   min_point = glm::clamp( min_point, -1.0f, 1.0f );
+   max_point = glm::clamp( max_point, -1.0f, 1.0f );
+
+   glm::mat4 crop(1.0f);
+   crop[0][0] = 2.0f / (max_point.x - min_point.x);
+   crop[1][1] = 2.0f / (max_point.y - min_point.y);
+   crop[2][2] = 2.0f / (max_point.z - min_point.z);
+   crop[3][0] = -0.5f * (max_point.x + min_point.x) * crop[0][0];
+   crop[3][1] = -0.5f * (max_point.y + min_point.y) * crop[1][1];
+   crop[3][2] = -0.5f * (max_point.z + min_point.z) * crop[2][2];
+   return crop;
+}
+
 void RendererGL::drawShadowWithPCF() const
 {
    glViewport( 0, 0, FrameWidth, FrameHeight );
@@ -404,6 +489,23 @@ void RendererGL::drawShadowWithPCF() const
 }
 
 void RendererGL::drawShadowWithVSM() const
+{
+   glViewport( 0, 0, FrameWidth, FrameHeight );
+   glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+   glUseProgram( VSMSceneShader->getShaderProgram() );
+
+   Lights->transferUniformsToShader( VSMSceneShader.get() );
+   glUniform1i( VSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
+
+   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   glUniformMatrix4fv( VSMSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
+
+   glBindTextureUnit( 0, MomentsTextureID );
+   drawObject( VSMSceneShader.get(), MainCamera.get() );
+   drawBoxObject( VSMSceneShader.get(), MainCamera.get() );
+}
+
+void RendererGL::drawShadowWithPSVSM() const
 {
    glViewport( 0, 0, FrameWidth, FrameHeight );
    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
@@ -482,6 +584,14 @@ void RendererGL::render()
       case ALGORITHM_TO_COMPARE::VSM:
          drawMomentsMapFromLightView();
          drawShadowWithVSM();
+         break;
+      case ALGORITHM_TO_COMPARE::PSVSM:
+         splitViewFrustum();
+         for (int i = 0; i < SplitNum; ++i) {
+            const glm::mat4 crop_matrix = calculateLightCropMatrix( SplitPositions[i], SplitPositions[i + 1] );
+            drawMomentsMapFromLightView();
+            drawShadowWithPSVSM();
+         }
          break;
    }
 

@@ -24,7 +24,7 @@ public:
    void play();
 
 private:
-   enum class ALGORITHM_TO_COMPARE { PCF = 0, VSM };
+   enum class ALGORITHM_TO_COMPARE { PCF = 0, VSM, PSVSM };
 
    inline static RendererGL* Renderer = nullptr;
    GLFWwindow* Window;
@@ -33,7 +33,7 @@ private:
    int FrameHeight;
    int ShadowMapSize;
    int ActiveLightIndex;
-   int PassNum;
+   int SplitNum;
    GLuint DepthFBO;
    GLuint DepthTextureID;
    GLuint MomentsFBO;
@@ -51,6 +51,7 @@ private:
    std::unique_ptr<LightGL> Lights;
    std::unique_ptr<ObjectGL> Object;
    std::unique_ptr<ObjectGL> WallObject;
+   std::vector<float> SplitPositions;
    ALGORITHM_TO_COMPARE AlgorithmToCompare;
 
    // 16 and 32 do well, anything in between or below is bad.
@@ -81,8 +82,11 @@ private:
    void drawBoxObject(ShaderGL* shader, const CameraGL* camera) const;
    void drawDepthMapFromLightView() const;
    void drawMomentsMapFromLightView() const;
+   void splitViewFrustum();
+   [[nodiscard]] glm::mat4 calculateLightCropMatrix(float near, float far) const;
    void drawShadowWithPCF() const;
    void drawShadowWithVSM() const;
+   void drawShadowWithPSVSM() const;
    void drawText(const std::string& text, glm::vec2 start_position) const;
    void render();
 };

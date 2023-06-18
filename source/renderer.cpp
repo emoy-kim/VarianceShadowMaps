@@ -107,7 +107,8 @@ void RendererGL::writeFrame() const
    const int size = FrameWidth * FrameHeight * 3;
    auto* buffer = new uint8_t[size];
    glPixelStorei( GL_PACK_ALIGNMENT, 1 );
-   glReadBuffer( GL_COLOR_ATTACHMENT0 );
+   glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+   glNamedFramebufferReadBuffer( 0, GL_COLOR_ATTACHMENT0 );
    glReadPixels( 0, 0, FrameWidth, FrameHeight, GL_BGR, GL_UNSIGNED_BYTE, buffer );
    FIBITMAP* image = FreeImage_ConvertFromRawBits(
       buffer, FrameWidth, FrameHeight, FrameWidth * 3, 24,
@@ -145,6 +146,7 @@ void RendererGL::writeMomentsArrayTexture() const
    auto* buffer = new uint8_t[size];
    auto* raw_buffer = new GLfloat[size * 2];
    glPixelStorei( GL_PACK_ALIGNMENT, 1 );
+   glBindFramebuffer( GL_FRAMEBUFFER, MomentsLayerFBO );
    for (int s = 0; s < SplitNum; ++s) {
       glNamedFramebufferReadBuffer( MomentsLayerFBO, GL_COLOR_ATTACHMENT0 + s );
       glReadPixels( 0, 0, ShadowMapSize, ShadowMapSize, GL_RG, GL_FLOAT, raw_buffer );
@@ -160,6 +162,7 @@ void RendererGL::writeMomentsArrayTexture() const
       FreeImage_Save( FIF_PNG, image, std::string("../moments" + std::to_string( s ) + ".png").c_str() );
       FreeImage_Unload( image );
    }
+   delete [] raw_buffer;
    delete [] buffer;
 }
 
@@ -193,6 +196,9 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
          break;
       case GLFW_KEY_C:
          Renderer->writeFrame();
+         break;
+      case GLFW_KEY_D:
+         if (Renderer->AlgorithmToCompare == ALGORITHM_TO_COMPARE::PSVSM) Renderer->writeMomentsArrayTexture();
          break;
       case GLFW_KEY_L:
          Renderer->Lights->toggleLightSwitch();
@@ -452,7 +458,6 @@ void RendererGL::drawMomentsArrayMapFromLightView() const
       drawObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
       drawBoxObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
    }
-   //writeMomentsArrayTexture();
 }
 
 void RendererGL::splitViewFrustum()
@@ -554,8 +559,8 @@ void RendererGL::drawShadowWithPCF() const
    Lights->transferUniformsToShader( PCFSceneShader.get() );
    PCFSceneShader->uniform1i( "LightIndex", ActiveLightIndex );
 
-   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();PCFSceneShader->uniformMat4fv( "LightViewProjectionMatrix", view_projection );
-   glUniformMatrix4fv( PCFSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
+   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   PCFSceneShader->uniformMat4fv( "LightViewProjectionMatrix", view_projection );
 
    glBindTextureUnit( 0, DepthTextureID );
    drawObject( PCFSceneShader.get(), MainCamera.get() );

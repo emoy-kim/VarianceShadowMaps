@@ -71,9 +71,9 @@ private:
 
    void registerCallbacks() const;
    void initialize();
-   void writeFrame(const std::string& name) const;
-   void writeDepthTexture(const std::string& name) const;
-   void writeMomentsArrayTexture(const std::string& name) const;
+   void writeFrame() const;
+   void writeDepthTexture() const;
+   void writeMomentsArrayTexture() const;
    static void printOpenGLInformation();
    static void cleanup(GLFWwindow* window);
    static void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods);

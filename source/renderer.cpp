@@ -102,7 +102,7 @@ void RendererGL::initialize()
    );
 }
 
-void RendererGL::writeFrame(const std::string& name) const
+void RendererGL::writeFrame() const
 {
    const int size = FrameWidth * FrameHeight * 3;
    auto* buffer = new uint8_t[size];
@@ -113,12 +113,12 @@ void RendererGL::writeFrame(const std::string& name) const
       buffer, FrameWidth, FrameHeight, FrameWidth * 3, 24,
       FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, false
    );
-   FreeImage_Save( FIF_PNG, image, name.c_str() );
+   FreeImage_Save( FIF_PNG, image, "../result.png" );
    FreeImage_Unload( image );
    delete [] buffer;
 }
 
-void RendererGL::writeDepthTexture(const std::string& name) const
+void RendererGL::writeDepthTexture() const
 {
    const int size = ShadowMapSize * ShadowMapSize;
    auto* buffer = new uint8_t[size];
@@ -133,13 +133,13 @@ void RendererGL::writeDepthTexture(const std::string& name) const
       buffer, ShadowMapSize, ShadowMapSize, ShadowMapSize, 8,
       FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, false
    );
-   FreeImage_Save( FIF_PNG, image, name.c_str() );
+   FreeImage_Save( FIF_PNG, image, "../depth.png" );
    FreeImage_Unload( image );
    delete [] raw_buffer;
    delete [] buffer;
 }
 
-void RendererGL::writeMomentsArrayTexture(const std::string& name) const
+void RendererGL::writeMomentsArrayTexture() const
 {
    const int size = ShadowMapSize * ShadowMapSize;
    auto* buffer = new uint8_t[size];
@@ -157,7 +157,7 @@ void RendererGL::writeMomentsArrayTexture(const std::string& name) const
          buffer, ShadowMapSize, ShadowMapSize, ShadowMapSize, 8,
          FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, false
       );
-      FreeImage_Save( FIF_PNG, image, std::string(name + std::to_string( s ) + ".png").c_str() );
+      FreeImage_Save( FIF_PNG, image, std::string("../moments" + std::to_string( s ) + ".png").c_str() );
       FreeImage_Unload( image );
    }
    delete [] buffer;
@@ -192,7 +192,7 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
          }
          break;
       case GLFW_KEY_C:
-         Renderer->writeFrame( "../result.png" );
+         Renderer->writeFrame();
          break;
       case GLFW_KEY_L:
          Renderer->Lights->toggleLightSwitch();
@@ -452,7 +452,7 @@ void RendererGL::drawMomentsArrayMapFromLightView() const
       drawObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
       drawBoxObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
    }
-   //writeMomentsArrayTexture( "../moments" );
+   //writeMomentsArrayTexture();
 }
 
 void RendererGL::splitViewFrustum()

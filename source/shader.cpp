@@ -169,6 +169,12 @@ void ShaderGL::setSceneUniformLocations(int light_num)
    addUniformLocation( "LightViewProjectionMatrix" );
 }
 
+void ShaderGL::setPSSMSceneUniformLocations(int light_num)
+{
+   setSceneUniformLocations( light_num );
+   addUniformLocation( "SplitPositions" );
+}
+
 void ShaderGL::transferBasicTransformationUniforms(const glm::mat4& to_world, const CameraGL* camera) const
 {
    const glm::mat4 view = camera->getViewMatrix();

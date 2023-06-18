@@ -438,18 +438,17 @@ void RendererGL::drawMomentsArrayMapFromLightView() const
 
    constexpr GLfloat one = 1.0f;
    constexpr std::array<GLfloat, 2> clear_moments = { 1.0f, 1.0f };
+
    glUseProgram( LightViewMomentsArrayShader->getShaderProgram() );
-   glUniformMatrix4fv(
-      LightViewMomentsArrayShader->getLocation( "LightViewProjectionMatrix" ),
-      SplitNum, GL_FALSE, &LightViewProjectionMatrices[0][0][0]
-   );
+   LightViewMomentsArrayShader->uniformMat4fv( "LightViewProjectionMatrix", LightViewProjectionMatrices );
+
    for (int i = 0; i < SplitNum; ++i) {
       const GLenum draw_buffer = GL_COLOR_ATTACHMENT0 + i;
       glNamedFramebufferDrawBuffers( MomentsLayerFBO, 1, &draw_buffer );
       glClearNamedFramebufferfv( MomentsLayerFBO, GL_COLOR, 0, &clear_moments[0] );
       glClearNamedFramebufferfv( MomentsLayerFBO, GL_DEPTH, 0, &one );
 
-      glUniform1i( LightViewMomentsArrayShader->getLocation( "TextureIndex" ), i );
+      LightViewMomentsArrayShader->uniform1i( "TextureIndex", i );
       drawObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
       drawBoxObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
    }
@@ -553,9 +552,9 @@ void RendererGL::drawShadowWithPCF() const
    glUseProgram( PCFSceneShader->getShaderProgram() );
 
    Lights->transferUniformsToShader( PCFSceneShader.get() );
-   glUniform1i( PCFSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
+   PCFSceneShader->uniform1i( "LightIndex", ActiveLightIndex );
 
-   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();PCFSceneShader->uniformMat4fv( "LightViewProjectionMatrix", view_projection );
    glUniformMatrix4fv( PCFSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
 
    glBindTextureUnit( 0, DepthTextureID );
@@ -570,10 +569,10 @@ void RendererGL::drawShadowWithVSM() const
    glUseProgram( VSMSceneShader->getShaderProgram() );
 
    Lights->transferUniformsToShader( VSMSceneShader.get() );
-   glUniform1i( VSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
+   VSMSceneShader->uniform1i( "LightIndex", ActiveLightIndex );
 
    const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
-   glUniformMatrix4fv( VSMSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
+   VSMSceneShader->uniformMat4fv( "LightViewProjectionMatrix", view_projection );
 
    glBindTextureUnit( 0, MomentsTextureID );
    drawObject( VSMSceneShader.get(), MainCamera.get() );
@@ -587,13 +586,11 @@ void RendererGL::drawShadowWithPSVSM() const
    glUseProgram( PSVSMSceneShader->getShaderProgram() );
 
    Lights->transferUniformsToShader( PSVSMSceneShader.get() );
-   glUniform1i( PSVSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
-   glUniformMatrix4fv(
-      PSVSMSceneShader->getLocation( "LightViewProjectionMatrix" ),
-      SplitNum, GL_FALSE, &LightViewProjectionMatrices[0][0][0]
-   );
+   PSVSMSceneShader->uniform1i( "LightIndex", ActiveLightIndex );
+   PSVSMSceneShader->uniform1fv( "SplitPositions", SplitNum, SplitPositions.data() );
+   PSVSMSceneShader->uniformMat4fv( "LightViewProjectionMatrix", LightViewProjectionMatrices );
 
-   glBindTextureUnit( 0, MomentsTextureID );
+   glBindTextureUnit( 0, MomentsTextureArrayID );
    drawObject( PSVSMSceneShader.get(), MainCamera.get() );
    drawBoxObject( PSVSMSceneShader.get(), MainCamera.get() );
 }
@@ -688,7 +685,7 @@ void RendererGL::play()
    TextShader->setTextUniformLocations();
    PCFSceneShader->setSceneUniformLocations( 1 );
    VSMSceneShader->setSceneUniformLocations( 1 );
-   PSVSMSceneShader->setSceneUniformLocations( 1 );
+   PSVSMSceneShader->setPSSMSceneUniformLocations( 1 );
    LightViewDepthShader->setLightViewUniformLocations();
    LightViewMomentsShader->setLightViewUniformLocations();
    LightViewMomentsArrayShader->setLightViewArrayUniformLocations();

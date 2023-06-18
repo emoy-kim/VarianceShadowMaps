@@ -45,6 +45,7 @@ public:
    void setLightViewUniformLocations();
    void setLightViewArrayUniformLocations();
    void setSceneUniformLocations(int light_num);
+   void setPSSMSceneUniformLocations(int light_num);
    void addUniformLocation(const std::string& name)
    {
       CustomLocations[name] = glGetUniformLocation( ShaderProgram, name.c_str() );
@@ -89,6 +90,10 @@ public:
    void uniformMat4fv(const char* name, const glm::mat4& value) const
    {
       glProgramUniformMatrix4fv( ShaderProgram, CustomLocations.find( name )->second, 1, GL_FALSE, &value[0][0] );
+   }
+   void uniformMat4fv(const char* name, const std::vector<glm::mat4>& value) const
+   {
+      glProgramUniformMatrix4fv( ShaderProgram, CustomLocations.find( name )->second, value.size(), GL_FALSE, &value[0][0][0] );
    }
    [[nodiscard]] GLuint getShaderProgram() const { return ShaderProgram; }
    [[nodiscard]] GLint getLocation(const std::string& name) const { return CustomLocations.find( name )->second; }

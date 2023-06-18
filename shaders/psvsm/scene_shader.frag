@@ -40,7 +40,6 @@ uniform vec4 GlobalAmbient;
 in vec3 position_in_wc;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
-in vec2 tex_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -94,9 +93,9 @@ float reduceLightBleeding(in float shadow)
 
 float getShadowWithPSVSM()
 {
-   vec4 split_positions = vec4(SplitPositions[0], SplitPositions[1], SplitPositions[2], 1E+20f);
    float slice_depth = -position_in_ec.z;
-   int split = int(dot( vec4(one), vec4(greaterThan( vec4(slice_depth), split_positions )) ));
+   vec3 split_positions = vec3(SplitPositions[0], SplitPositions[1], SplitPositions[2]);
+   int split = int(dot( vec3(one), vec3(greaterThan( vec3(slice_depth), split_positions )) ));
 
    const int split_lookup[8] = { 0, 1, 1, 2, 2, 2, 2, 3 };
    int power_of_two = 1 << split;
@@ -105,11 +104,11 @@ float getShadowWithPSVSM()
    int split_xy = int(abs( dFdx( split_y ) ));
    int split_max = max( split_xy, max( split_x, split_y ) );
    // split_max = min( split_max, 8 );
-   split = split_max > 0 ? split_lookup[split_max - 1] : split;
+   split = split_max > 0 ? split_lookup[split_max - 1] : split - 1;
 
    const float bias_for_shadow_acne = 0.005f;
-   vec4 position_in_light_cc = LightViewProjectionMatrix[split] * vec4(position_in_wc, 1.0f);
-   vec4 depth_map_coord = vec4(0.5f * position_in_light_cc.xyz / position_in_light_cc.w + 0.5f, position_in_light_cc.w);
+   vec4 position_in_light = LightViewProjectionMatrix[split] * vec4(position_in_wc, 1.0f);
+   vec4 depth_map_coord = vec4(0.5f * position_in_light.xyz / position_in_light.w + 0.5f, position_in_light.w);
    depth_map_coord.z -= bias_for_shadow_acne;
 
    const float epsilon = 1e-2f;

@@ -42,8 +42,8 @@ public:
    );
    void setComputeShaders(const char* compute_shader_path);
    void setTextUniformLocations();
-   void setLightViewDepthUniformLocations();
-   void setLightViewMomentsUniformLocations();
+   void setLightViewUniformLocations();
+   void setLightViewArrayUniformLocations();
    void setSceneUniformLocations(int light_num);
    void addUniformLocation(const std::string& name)
    {

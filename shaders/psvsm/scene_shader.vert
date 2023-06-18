@@ -4,16 +4,15 @@ uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
 uniform mat4 ModelViewProjectionMatrix;
-uniform mat4 LightViewProjectionMatrix;
 
 layout (location = 0) in vec3 v_position;
 layout (location = 1) in vec3 v_normal;
 layout (location = 2) in vec2 v_tex_coord;
 
+out vec3 position_in_wc;
 out vec3 position_in_ec;
 out vec3 normal_in_ec;
 out vec2 tex_coord;
-out vec4 depth_map_coord;
 
 void main()
 {   
@@ -27,11 +26,7 @@ void main()
 
    tex_coord = v_tex_coord;
 
-   const float bias_for_shadow_acne = 0.005f;
-   vec4 position_in_light_cc = LightViewProjectionMatrix * WorldMatrix * vec4(v_position, 1.0f);
-   depth_map_coord.xyz = 0.5f * position_in_light_cc.xyz / position_in_light_cc.w + 0.5f;
-   depth_map_coord.z -= bias_for_shadow_acne;
-   depth_map_coord.w = position_in_light_cc.w;
+   position_in_wc = vec3(WorldMatrix * vec4(v_position, 1.0f));
 
    gl_Position = ModelViewProjectionMatrix * vec4(v_position, 1.0f);
 }

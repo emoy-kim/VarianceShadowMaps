@@ -38,6 +38,8 @@ private:
    GLuint DepthTextureID;
    GLuint MomentsFBO;
    GLuint MomentsTextureID;
+   GLuint MomentsLayerFBO;
+   GLuint MomentsTextureArrayID;
    glm::ivec2 ClickedPoint;
    std::unique_ptr<TextGL> Texter;
    std::unique_ptr<CameraGL> MainCamera;
@@ -49,10 +51,12 @@ private:
    std::unique_ptr<ShaderGL> PSVSMSceneShader;
    std::unique_ptr<ShaderGL> LightViewDepthShader;
    std::unique_ptr<ShaderGL> LightViewMomentsShader;
+   std::unique_ptr<ShaderGL> LightViewMomentsArrayShader;
    std::unique_ptr<LightGL> Lights;
    std::unique_ptr<ObjectGL> Object;
    std::unique_ptr<ObjectGL> WallObject;
    std::vector<float> SplitPositions;
+   std::vector<glm::mat4> LightViewProjectionMatrices;
    ALGORITHM_TO_COMPARE AlgorithmToCompare;
 
    // 16 and 32 do well, anything in between or below is bad.
@@ -68,6 +72,7 @@ private:
    void initialize();
    void writeFrame(const std::string& name) const;
    void writeDepthTexture(const std::string& name) const;
+   void writeMomentsArrayTexture(const std::string& name) const;
    static void printOpenGLInformation();
    static void cleanup(GLFWwindow* window);
    static void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods);
@@ -82,12 +87,13 @@ private:
    void drawObject(ShaderGL* shader, CameraGL* camera) const;
    void drawBoxObject(ShaderGL* shader, const CameraGL* camera) const;
    void drawDepthMapFromLightView() const;
-   void drawMomentsMapFromLightView(const glm::mat4& light_crop_matrix = glm::mat4(1.0f), bool is_pssm = false) const;
+   void drawMomentsMapFromLightView() const;
+   void drawMomentsArrayMapFromLightView() const;
    void splitViewFrustum();
-   [[nodiscard]] glm::mat4 calculateLightCropMatrix(float near, float far) const;
+   void calculateLightCropMatrices();
    void drawShadowWithPCF() const;
    void drawShadowWithVSM() const;
-   void drawShadowWithPSVSM(const glm::mat4& light_crop_matrix) const;
+   void drawShadowWithPSVSM() const;
    void drawText(const std::string& text, glm::vec2 start_position) const;
    void render();
 };

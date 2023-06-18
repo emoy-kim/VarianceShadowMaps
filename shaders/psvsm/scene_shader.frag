@@ -25,11 +25,12 @@ struct MateralInfo {
 };
 uniform MateralInfo Material;
 
-layout (binding = 0) uniform sampler2D MomentsMap;
+layout (binding = 0) uniform sampler2DArray MomentsMap;
 
 uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
+uniform mat4 LightViewProjectionMatrix[4];
 uniform int UseLight;
 uniform int LightIndex;
 uniform int LightNum;
@@ -75,7 +76,7 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
 float getChebyshevUpperBound()
 {
    float t = depth_map_coord.z;
-   vec2 moments = texture( MomentsMap, depth_map_coord.xy ).rg;
+   vec2 moments = vec2(zero);//texture( MomentsMap, depth_map_coord.xy ).rg;
    if (t <= moments.x) return one;
 
    const float min_variance = 1e-6f;

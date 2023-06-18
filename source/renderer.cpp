@@ -3,11 +3,12 @@
 RendererGL::RendererGL() :
    Window( nullptr ), Pause( false ), FrameWidth( 1920 ), FrameHeight( 1080 ), ShadowMapSize( 1024 ),
    ActiveLightIndex( 0 ), SplitNum( 3 ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ), MomentsTextureID( 0 ),
-   ClickedPoint( -1, -1 ), Texter( std::make_unique<TextGL>() ), MainCamera( std::make_unique<CameraGL>() ),
-   TextCamera( std::make_unique<CameraGL>() ), LightCamera( std::make_unique<CameraGL>() ),
-   TextShader( std::make_unique<ShaderGL>() ), PCFSceneShader( std::make_unique<ShaderGL>() ),
-   VSMSceneShader( std::make_unique<ShaderGL>() ), PSVSMSceneShader( std::make_unique<ShaderGL>() ),
-   LightViewDepthShader( std::make_unique<ShaderGL>() ), LightViewMomentsShader( std::make_unique<ShaderGL>() ),
+   MomentsLayerFBO( 0 ), MomentsTextureArrayID( 0 ), ClickedPoint( -1, -1 ), Texter( std::make_unique<TextGL>() ),
+   MainCamera( std::make_unique<CameraGL>() ), TextCamera( std::make_unique<CameraGL>() ),
+   LightCamera( std::make_unique<CameraGL>() ), TextShader( std::make_unique<ShaderGL>() ),
+   PCFSceneShader( std::make_unique<ShaderGL>() ), VSMSceneShader( std::make_unique<ShaderGL>() ),
+   PSVSMSceneShader( std::make_unique<ShaderGL>() ), LightViewDepthShader( std::make_unique<ShaderGL>() ),
+   LightViewMomentsShader( std::make_unique<ShaderGL>() ), LightViewMomentsArrayShader( std::make_unique<ShaderGL>() ),
    Lights( std::make_unique<LightGL>() ), Object( std::make_unique<ObjectGL>() ),
    WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::PSVSM )
 {
@@ -21,8 +22,10 @@ RendererGL::~RendererGL()
 {
    if (DepthTextureID != 0) glDeleteTextures( 1, &DepthTextureID );
    if (MomentsTextureID != 0) glDeleteTextures( 1, &MomentsTextureID );
+   if (MomentsTextureArrayID != 0) glDeleteTextures( 1, &MomentsTextureArrayID );
    if (DepthFBO != 0) glDeleteFramebuffers( 1, &DepthFBO );
    if (MomentsFBO != 0) glDeleteFramebuffers( 1, &MomentsFBO );
+   if (MomentsLayerFBO != 0) glDeleteFramebuffers( 1, &MomentsLayerFBO );
 }
 
 void RendererGL::printOpenGLInformation()
@@ -92,6 +95,10 @@ void RendererGL::initialize()
       std::string(shader_directory_path + "/light_view_moments_generator.vert").c_str(),
       std::string(shader_directory_path + "/light_view_moments_generator.frag").c_str()
    );
+   LightViewMomentsArrayShader->setShader(
+      std::string(shader_directory_path + "/light_view_moments_array_generator.vert").c_str(),
+      std::string(shader_directory_path + "/light_view_moments_array_generator.frag").c_str()
+   );
 }
 
 void RendererGL::writeFrame(const std::string& name) const
@@ -128,6 +135,30 @@ void RendererGL::writeDepthTexture(const std::string& name) const
    FreeImage_Save( FIF_PNG, image, name.c_str() );
    FreeImage_Unload( image );
    delete [] raw_buffer;
+   delete [] buffer;
+}
+
+void RendererGL::writeMomentsArrayTexture(const std::string& name) const
+{
+   const int size = ShadowMapSize * ShadowMapSize;
+   auto* buffer = new uint8_t[size];
+   auto* raw_buffer = new GLfloat[size * 2];
+   glPixelStorei( GL_PACK_ALIGNMENT, 1 );
+   for (int s = 0; s < SplitNum; ++s) {
+      glNamedFramebufferReadBuffer( MomentsLayerFBO, GL_COLOR_ATTACHMENT0 + s );
+      glReadPixels( 0, 0, ShadowMapSize, ShadowMapSize, GL_RG, GL_FLOAT, raw_buffer );
+
+      for (int i = 0; i < size; ++i) {
+         buffer[i] = static_cast<uint8_t>(LightCamera->linearizeDepthValue( raw_buffer[i * 2] ) * 255.0f);
+      }
+
+      FIBITMAP* image = FreeImage_ConvertFromRawBits(
+         buffer, ShadowMapSize, ShadowMapSize, ShadowMapSize, 8,
+         FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, false
+      );
+      FreeImage_Save( FIF_PNG, image, std::string(name + std::to_string( s ) + ".png").c_str() );
+      FreeImage_Unload( image );
+   }
    delete [] buffer;
 }
 
@@ -312,6 +343,23 @@ void RendererGL::setLightViewFrameBuffers()
    if (glCheckNamedFramebufferStatus( MomentsFBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
       std::cerr << "MomentsFBO Setup Error\n";
    }
+
+   glCreateTextures( GL_TEXTURE_2D_ARRAY, 1, &MomentsTextureArrayID );
+   glTextureStorage3D( MomentsTextureArrayID, 1, GL_RG32F, ShadowMapSize, ShadowMapSize, SplitNum );
+   glTextureParameteri( MomentsTextureArrayID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+   glTextureParameteri( MomentsTextureArrayID, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+   glTextureParameteri( MomentsTextureArrayID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+   glTextureParameteri( MomentsTextureArrayID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
+
+   glCreateFramebuffers( 1, &MomentsLayerFBO );
+   for (int i = 0; i < SplitNum; ++i) {
+      glNamedFramebufferTextureLayer( MomentsLayerFBO, GL_COLOR_ATTACHMENT0 + i, MomentsTextureArrayID, 0, i );
+   }
+   glNamedFramebufferTexture( MomentsLayerFBO, GL_DEPTH_ATTACHMENT, DepthTextureID, 0 );
+
+   if (glCheckNamedFramebufferStatus( MomentsLayerFBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
+      std::cerr << "MomentsLayerFBO Setup Error\n";
+   }
 }
 
 void RendererGL::drawObject(ShaderGL* shader, CameraGL* camera) const
@@ -367,7 +415,7 @@ void RendererGL::drawDepthMapFromLightView() const
    glColorMask( GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE );
 }
 
-void RendererGL::drawMomentsMapFromLightView(const glm::mat4& light_crop_matrix, bool is_pssm) const
+void RendererGL::drawMomentsMapFromLightView() const
 {
    glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
    glBindFramebuffer( GL_FRAMEBUFFER, MomentsFBO );
@@ -379,12 +427,33 @@ void RendererGL::drawMomentsMapFromLightView(const glm::mat4& light_crop_matrix,
    glClearNamedFramebufferfv( MomentsFBO, GL_DEPTH, 0, &one );
 
    glUseProgram( LightViewMomentsShader->getShaderProgram() );
-   glUniform1i( LightViewMomentsShader->getLocation( "IsPSSM" ), is_pssm ? 1 : 0 );
-   if (is_pssm) {
-      glUniformMatrix4fv( LightViewMomentsShader->getLocation( "LightCropMatrix" ), 1, GL_FALSE, &light_crop_matrix[0][0] );
-   }
    drawObject( LightViewMomentsShader.get(), LightCamera.get() );
    drawBoxObject( LightViewMomentsShader.get(), LightCamera.get() );
+}
+
+void RendererGL::drawMomentsArrayMapFromLightView() const
+{
+   glViewport( 0, 0, ShadowMapSize, ShadowMapSize );
+   glBindFramebuffer( GL_FRAMEBUFFER, MomentsLayerFBO );
+
+   constexpr GLfloat one = 1.0f;
+   constexpr std::array<GLfloat, 2> clear_moments = { 1.0f, 1.0f };
+   glUseProgram( LightViewMomentsArrayShader->getShaderProgram() );
+   glUniformMatrix4fv(
+      LightViewMomentsArrayShader->getLocation( "LightViewProjectionMatrix" ),
+      SplitNum, GL_FALSE, &LightViewProjectionMatrices[0][0][0]
+   );
+   for (int i = 0; i < SplitNum; ++i) {
+      const GLenum draw_buffer = GL_COLOR_ATTACHMENT0 + i;
+      glNamedFramebufferDrawBuffers( MomentsLayerFBO, 1, &draw_buffer );
+      glClearNamedFramebufferfv( MomentsLayerFBO, GL_COLOR, 0, &clear_moments[0] );
+      glClearNamedFramebufferfv( MomentsLayerFBO, GL_DEPTH, 0, &one );
+
+      glUniform1i( LightViewMomentsArrayShader->getLocation( "TextureIndex" ), i );
+      drawObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
+      drawBoxObject( LightViewMomentsArrayShader.get(), LightCamera.get() );
+   }
+   //writeMomentsArrayTexture( "../moments" );
 }
 
 void RendererGL::splitViewFrustum()
@@ -401,82 +470,80 @@ void RendererGL::splitViewFrustum()
       const float uniform_split = n + (f - n) * r;
       SplitPositions[i] = glm::mix( uniform_split, logarithmic_split, split_weight );
    }
-
-   const float split_ratio = f / (f - n);
-   int index = 1;
-   for (; index < SplitNum; ++index) {
-      SplitPositions[index - 1] = (SplitPositions[index] - n) * split_ratio;
-   }
-   for (; index <= SplitNum + 1; ++index) {
-      SplitPositions[index - 1] = std::numeric_limits<float>::max();
-   }
 }
 
-glm::mat4 RendererGL::calculateLightCropMatrix(float near, float far) const
+void RendererGL::calculateLightCropMatrices()
 {
    const glm::mat4& projection_matrix = MainCamera->getProjectionMatrix();
    const float scale_x = 1.0f / projection_matrix[0][0];
    const float scale_y = 1.0f / projection_matrix[1][1];
-   const float near_plane_half_width = near * scale_x;
-   const float near_plane_half_height = near * scale_y;
-   const float far_plane_half_width = far * scale_x;
-   const float far_plane_half_height = far * scale_y;
 
-   std::array<glm::vec3, 8> frustum{};
-   frustum[0] = glm::vec3(-near_plane_half_width, -near_plane_half_height, -near);
-   frustum[1] = glm::vec3(-near_plane_half_width, near_plane_half_height, -near);
-   frustum[2] = glm::vec3(near_plane_half_width, near_plane_half_height, -near);
-   frustum[3] = glm::vec3(near_plane_half_width, -near_plane_half_height, -near);
+   LightViewProjectionMatrices.clear();
+   const glm::mat4 light_view_projection_matrix = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   for (int s = 0; s < SplitNum; ++s) {
+      const float near = SplitPositions[s];
+      const float far = SplitPositions[s + 1];
+      const float near_plane_half_width = near * scale_x;
+      const float near_plane_half_height = near * scale_y;
+      const float far_plane_half_width = far * scale_x;
+      const float far_plane_half_height = far * scale_y;
 
-   frustum[4] = glm::vec3(-far_plane_half_width, -far_plane_half_height, -far);
-   frustum[5] = glm::vec3(-far_plane_half_width, far_plane_half_height, -far);
-   frustum[6] = glm::vec3(far_plane_half_width, far_plane_half_height, -far);
-   frustum[7] = glm::vec3(far_plane_half_width, -far_plane_half_height, -far);
+      std::array<glm::vec3, 8> frustum{};
+      frustum[0] = glm::vec3(-near_plane_half_width, -near_plane_half_height, -near);
+      frustum[1] = glm::vec3(-near_plane_half_width, near_plane_half_height, -near);
+      frustum[2] = glm::vec3(near_plane_half_width, near_plane_half_height, -near);
+      frustum[3] = glm::vec3(near_plane_half_width, -near_plane_half_height, -near);
 
-   std::array<glm::vec4, 8> ndc_points{};
-   const glm::mat4 to_light =
-      LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix() * glm::inverse( MainCamera->getViewMatrix() );
-   for (int i = 0; i < 8; ++i) {
-      ndc_points[i] = to_light * glm::vec4(frustum[i], 1.0f);
-      ndc_points[i].x /= ndc_points[i].w;
-      ndc_points[i].y /= ndc_points[i].w;
-      ndc_points[i].z /= ndc_points[i].w;
+      frustum[4] = glm::vec3(-far_plane_half_width, -far_plane_half_height, -far);
+      frustum[5] = glm::vec3(-far_plane_half_width, far_plane_half_height, -far);
+      frustum[6] = glm::vec3(far_plane_half_width, far_plane_half_height, -far);
+      frustum[7] = glm::vec3(far_plane_half_width, -far_plane_half_height, -far);
+
+      std::array<glm::vec4, 8> ndc_points{};
+      const glm::mat4 to_light =
+         LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix() * glm::inverse( MainCamera->getViewMatrix() );
+      for (int i = 0; i < 8; ++i) {
+         ndc_points[i] = to_light * glm::vec4(frustum[i], 1.0f);
+         ndc_points[i].x /= ndc_points[i].w;
+         ndc_points[i].y /= ndc_points[i].w;
+         ndc_points[i].z /= ndc_points[i].w;
+      }
+
+      auto min_point = glm::vec3(std::numeric_limits<float>::max());
+      auto max_point = glm::vec3(std::numeric_limits<float>::lowest());
+      for (int i = 0; i < 8; ++i) {
+         if (ndc_points[i].x < min_point.x) min_point.x = ndc_points[i].x;
+         if (ndc_points[i].y < min_point.y) min_point.y = ndc_points[i].y;
+         if (ndc_points[i].z < min_point.z) min_point.z = ndc_points[i].z;
+
+         if (ndc_points[i].x > max_point.x) max_point.x = ndc_points[i].x;
+         if (ndc_points[i].y > max_point.y) max_point.y = ndc_points[i].y;
+         if (ndc_points[i].z > max_point.z) max_point.z = ndc_points[i].z;
+      }
+      min_point.z = -1.0f;
+
+      constexpr float min_filter_width = 1.0f;
+      const glm::vec2 half_min_filter_width_in_ndc(
+         min_filter_width / static_cast<float>(FrameWidth),
+         min_filter_width / static_cast<float>(FrameHeight)
+      );
+      min_point.x -= half_min_filter_width_in_ndc.x;
+      min_point.y -= half_min_filter_width_in_ndc.y;
+      max_point.x += half_min_filter_width_in_ndc.x;
+      max_point.y += half_min_filter_width_in_ndc.y;
+
+      min_point = glm::clamp( min_point, -1.0f, 1.0f );
+      max_point = glm::clamp( max_point, -1.0f, 1.0f );
+
+      glm::mat4 crop(1.0f);
+      crop[0][0] = 2.0f / (max_point.x - min_point.x);
+      crop[1][1] = 2.0f / (max_point.y - min_point.y);
+      crop[2][2] = 2.0f / (max_point.z - min_point.z);
+      crop[3][0] = -0.5f * (max_point.x + min_point.x) * crop[0][0];
+      crop[3][1] = -0.5f * (max_point.y + min_point.y) * crop[1][1];
+      crop[3][2] = -0.5f * (max_point.z + min_point.z) * crop[2][2];
+      LightViewProjectionMatrices.emplace_back( crop * light_view_projection_matrix );
    }
-
-   auto min_point = glm::vec3(std::numeric_limits<float>::max());
-   auto max_point = glm::vec3(std::numeric_limits<float>::lowest());
-   for (int i = 0; i < 8; ++i) {
-      if (ndc_points[i].x < min_point.x) min_point.x = ndc_points[i].x;
-      if (ndc_points[i].y < min_point.y) min_point.y = ndc_points[i].y;
-      if (ndc_points[i].z < min_point.z) min_point.z = ndc_points[i].z;
-
-      if (ndc_points[i].x > max_point.x) max_point.x = ndc_points[i].x;
-      if (ndc_points[i].y > max_point.y) max_point.y = ndc_points[i].y;
-      if (ndc_points[i].z > max_point.z) max_point.z = ndc_points[i].z;
-   }
-   min_point.z = -1.0f;
-
-   constexpr float min_filter_width = 1.0f;
-   const glm::vec2 half_min_filter_width_in_ndc(
-      min_filter_width / static_cast<float>(FrameWidth),
-      min_filter_width / static_cast<float>(FrameHeight)
-   );
-   min_point.x -= half_min_filter_width_in_ndc.x;
-   min_point.y -= half_min_filter_width_in_ndc.y;
-   max_point.x += half_min_filter_width_in_ndc.x;
-   max_point.y += half_min_filter_width_in_ndc.y;
-
-   min_point = glm::clamp( min_point, -1.0f, 1.0f );
-   max_point = glm::clamp( max_point, -1.0f, 1.0f );
-
-   glm::mat4 crop(1.0f);
-   crop[0][0] = 2.0f / (max_point.x - min_point.x);
-   crop[1][1] = 2.0f / (max_point.y - min_point.y);
-   crop[2][2] = 2.0f / (max_point.z - min_point.z);
-   crop[3][0] = -0.5f * (max_point.x + min_point.x) * crop[0][0];
-   crop[3][1] = -0.5f * (max_point.y + min_point.y) * crop[1][1];
-   crop[3][2] = -0.5f * (max_point.z + min_point.z) * crop[2][2];
-   return crop;
 }
 
 void RendererGL::drawShadowWithPCF() const
@@ -513,7 +580,7 @@ void RendererGL::drawShadowWithVSM() const
    drawBoxObject( VSMSceneShader.get(), MainCamera.get() );
 }
 
-void RendererGL::drawShadowWithPSVSM(const glm::mat4& light_crop_matrix) const
+void RendererGL::drawShadowWithPSVSM() const
 {
    glViewport( 0, 0, FrameWidth, FrameHeight );
    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
@@ -521,9 +588,10 @@ void RendererGL::drawShadowWithPSVSM(const glm::mat4& light_crop_matrix) const
 
    Lights->transferUniformsToShader( PSVSMSceneShader.get() );
    glUniform1i( PSVSMSceneShader->getLocation( "LightIndex" ), ActiveLightIndex );
-
-   const glm::mat4 view_projection = light_crop_matrix * LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
-   glUniformMatrix4fv( PSVSMSceneShader->getLocation( "LightViewProjectionMatrix" ), 1, GL_FALSE, &view_projection[0][0] );
+   glUniformMatrix4fv(
+      PSVSMSceneShader->getLocation( "LightViewProjectionMatrix" ),
+      SplitNum, GL_FALSE, &LightViewProjectionMatrices[0][0][0]
+   );
 
    glBindTextureUnit( 0, MomentsTextureID );
    drawObject( PSVSMSceneShader.get(), MainCamera.get() );
@@ -595,11 +663,9 @@ void RendererGL::render()
          break;
       case ALGORITHM_TO_COMPARE::PSVSM:
          splitViewFrustum();
-         for (int i = 0; i < SplitNum; ++i) {
-            const glm::mat4 crop_matrix = calculateLightCropMatrix( SplitPositions[i], SplitPositions[i + 1] );
-            drawMomentsMapFromLightView( crop_matrix, true );
-            drawShadowWithPSVSM( crop_matrix );
-         }
+         calculateLightCropMatrices();
+         drawMomentsArrayMapFromLightView();
+         drawShadowWithPSVSM();
          break;
    }
 
@@ -623,8 +689,9 @@ void RendererGL::play()
    PCFSceneShader->setSceneUniformLocations( 1 );
    VSMSceneShader->setSceneUniformLocations( 1 );
    PSVSMSceneShader->setSceneUniformLocations( 1 );
-   LightViewDepthShader->setLightViewDepthUniformLocations();
-   LightViewMomentsShader->setLightViewMomentsUniformLocations();
+   LightViewDepthShader->setLightViewUniformLocations();
+   LightViewMomentsShader->setLightViewUniformLocations();
+   LightViewMomentsArrayShader->setLightViewArrayUniformLocations();
 
    while (!glfwWindowShouldClose( Window )) {
       if (!Pause) render();

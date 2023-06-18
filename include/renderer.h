@@ -34,6 +34,7 @@ private:
    int ShadowMapSize;
    int ActiveLightIndex;
    int SplitNum;
+   float BoxHalfSide;
    GLuint DepthFBO;
    GLuint DepthTextureID;
    GLuint MomentsFBO;

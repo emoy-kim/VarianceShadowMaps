@@ -2,8 +2,9 @@
 
 RendererGL::RendererGL() :
    Window( nullptr ), Pause( false ), FrameWidth( 1920 ), FrameHeight( 1080 ), ShadowMapSize( 1024 ),
-   ActiveLightIndex( 0 ), SplitNum( 3 ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ), MomentsTextureID( 0 ),
-   MomentsLayerFBO( 0 ), MomentsTextureArrayID( 0 ), ClickedPoint( -1, -1 ), Texter( std::make_unique<TextGL>() ),
+   ActiveLightIndex( 0 ), SplitNum( 3 ), BoxHalfSide( 350.0f ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ),
+   MomentsTextureID( 0 ), MomentsLayerFBO( 0 ), MomentsTextureArrayID( 0 ), ClickedPoint( -1, -1 ),
+   Texter( std::make_unique<TextGL>() ),
    MainCamera( std::make_unique<CameraGL>() ), TextCamera( std::make_unique<CameraGL>() ),
    LightCamera( std::make_unique<CameraGL>() ), TextShader( std::make_unique<ShaderGL>() ),
    PCFSceneShader( std::make_unique<ShaderGL>() ), VSMSceneShader( std::make_unique<ShaderGL>() ),
@@ -288,15 +289,14 @@ void RendererGL::setObject() const
 
 void RendererGL::setWallObject() const
 {
-   constexpr float half_length = 512.0f;
    std::vector<glm::vec3> wall_vertices;
-   wall_vertices.emplace_back( half_length, 0.0f, half_length );
-   wall_vertices.emplace_back( half_length, 0.0f, -half_length );
-   wall_vertices.emplace_back( -half_length, 0.0f, -half_length );
+   wall_vertices.emplace_back( BoxHalfSide, 0.0f, BoxHalfSide );
+   wall_vertices.emplace_back( BoxHalfSide, 0.0f, -BoxHalfSide );
+   wall_vertices.emplace_back( -BoxHalfSide, 0.0f, -BoxHalfSide );
 
-   wall_vertices.emplace_back( -half_length, 0.0f, half_length );
-   wall_vertices.emplace_back( half_length, 0.0f, half_length );
-   wall_vertices.emplace_back( -half_length, 0.0f, -half_length );
+   wall_vertices.emplace_back( -BoxHalfSide, 0.0f, BoxHalfSide );
+   wall_vertices.emplace_back( BoxHalfSide, 0.0f, BoxHalfSide );
+   wall_vertices.emplace_back( -BoxHalfSide, 0.0f, -BoxHalfSide );
 
    std::vector<glm::vec3> wall_normals;
    wall_normals.emplace_back( 0.0f, 1.0f, 0.0f );
@@ -383,7 +383,7 @@ void RendererGL::drawBoxObject(ShaderGL* shader, const CameraGL* camera) const
    glDrawArrays( WallObject->getDrawMode(), 0, WallObject->getVertexNum() );
 
    to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(0.0f, 512.0f, -512.0f) ) *
+      glm::translate( glm::mat4(1.0f), glm::vec3(0.0f, BoxHalfSide, -BoxHalfSide) ) *
       glm::rotate( glm::mat4(1.0f), glm::radians( 90.0f ), glm::vec3(1.0f, 0.0f, 0.0f) );
    shader->transferBasicTransformationUniforms( to_world, camera );
    WallObject->setDiffuseReflectionColor( { 0.32f, 0.81f, 0.29f, 1.0f } );
@@ -391,7 +391,7 @@ void RendererGL::drawBoxObject(ShaderGL* shader, const CameraGL* camera) const
    glDrawArrays( WallObject->getDrawMode(), 0, WallObject->getVertexNum() );
 
    to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(-512.0f, 512.0f, 0.0f) ) *
+      glm::translate( glm::mat4(1.0f), glm::vec3(-BoxHalfSide, BoxHalfSide, 0.0f) ) *
       glm::rotate( glm::mat4(1.0f), glm::radians( -90.0f ), glm::vec3(0.0f, 0.0f, 1.0f) );
    shader->transferBasicTransformationUniforms( to_world, camera );
    WallObject->setDiffuseReflectionColor( { 0.83f, 0.35f, 0.29f, 1.0f } );

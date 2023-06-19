@@ -1,0 +1,24 @@
+#version 460
+
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+layout (rg32f, binding = 0) uniform image2D OutTexture;
+layout (rg32f, binding = 1) uniform image2D InTexture;
+
+uniform int Size;
+uniform ivec2 Offsets;
+
+void main()
+{
+   int x = int(gl_GlobalInvocationID.x);
+   int y = int(gl_GlobalInvocationID.y);
+   if (x >= Size || y >= Size) return;
+
+   ivec2 position = ivec2(x, y);
+   vec4 sum = vec4(0.0f);
+   sum.rg += imageLoad( InTexture, position ).rg;
+   sum.rg += imageLoad( InTexture, position - Offsets ).rg;
+   sum.rg += imageLoad( InTexture, position - Offsets * 2 ).rg;
+   sum.rg += imageLoad( InTexture, position - Offsets * 3 ).rg;
+   imageStore( OutTexture, position, sum );
+}

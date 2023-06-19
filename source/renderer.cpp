@@ -3,15 +3,16 @@
 RendererGL::RendererGL() :
    Window( nullptr ), Pause( false ), FrameWidth( 1920 ), FrameHeight( 1080 ), ShadowMapSize( 1024 ),
    ActiveLightIndex( 0 ), SplitNum( 3 ), BoxHalfSide( 500.0f ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ),
-   MomentsTextureID( 0 ), MomentsLayerFBO( 0 ), MomentsTextureArrayID( 0 ), ClickedPoint( -1, -1 ),
-   Texter( std::make_unique<TextGL>() ),
-   MainCamera( std::make_unique<CameraGL>() ), TextCamera( std::make_unique<CameraGL>() ),
-   LightCamera( std::make_unique<CameraGL>() ), TextShader( std::make_unique<ShaderGL>() ),
-   PCFSceneShader( std::make_unique<ShaderGL>() ), VSMSceneShader( std::make_unique<ShaderGL>() ),
-   PSVSMSceneShader( std::make_unique<ShaderGL>() ), LightViewDepthShader( std::make_unique<ShaderGL>() ),
+   MomentsTextureID( 0 ), MomentsLayerFBO( 0 ), MomentsTextureArrayID( 0 ), SATTextureID( 0 ), ClickedPoint( -1, -1 ),
+   Texter( std::make_unique<TextGL>() ), MainCamera( std::make_unique<CameraGL>() ),
+   TextCamera( std::make_unique<CameraGL>() ), LightCamera( std::make_unique<CameraGL>() ),
+   TextShader( std::make_unique<ShaderGL>() ), PCFSceneShader( std::make_unique<ShaderGL>() ),
+   VSMSceneShader( std::make_unique<ShaderGL>() ), PSVSMSceneShader( std::make_unique<ShaderGL>() ),
+   SATVSMSceneShader( std::make_unique<ShaderGL>() ), LightViewDepthShader( std::make_unique<ShaderGL>() ),
    LightViewMomentsShader( std::make_unique<ShaderGL>() ), LightViewMomentsArrayShader( std::make_unique<ShaderGL>() ),
-   Lights( std::make_unique<LightGL>() ), Object( std::make_unique<ObjectGL>() ),
-   WallObject( std::make_unique<ObjectGL>() ), AlgorithmToCompare( ALGORITHM_TO_COMPARE::PSVSM )
+   SATShader( std::make_unique<ShaderGL>() ), Lights( std::make_unique<LightGL>() ),
+   Object( std::make_unique<ObjectGL>() ), WallObject( std::make_unique<ObjectGL>() ),
+   AlgorithmToCompare( ALGORITHM_TO_COMPARE::SATVSM )
 {
    Renderer = this;
 
@@ -24,6 +25,7 @@ RendererGL::~RendererGL()
    if (DepthTextureID != 0) glDeleteTextures( 1, &DepthTextureID );
    if (MomentsTextureID != 0) glDeleteTextures( 1, &MomentsTextureID );
    if (MomentsTextureArrayID != 0) glDeleteTextures( 1, &MomentsTextureArrayID );
+   if (SATTextureID != 0) glDeleteTextures( 1, &SATTextureID );
    if (DepthFBO != 0) glDeleteFramebuffers( 1, &DepthFBO );
    if (MomentsFBO != 0) glDeleteFramebuffers( 1, &MomentsFBO );
    if (MomentsLayerFBO != 0) glDeleteFramebuffers( 1, &MomentsLayerFBO );
@@ -88,18 +90,23 @@ void RendererGL::initialize()
       std::string(shader_directory_path + "/psvsm/scene_shader.vert").c_str(),
       std::string(shader_directory_path + "/psvsm/scene_shader.frag").c_str()
    );
+   SATVSMSceneShader->setShader(
+      std::string(shader_directory_path + "/satvsm/scene_shader.vert").c_str(),
+      std::string(shader_directory_path + "/satvsm/scene_shader.frag").c_str()
+   );
    LightViewDepthShader->setShader(
-      std::string(shader_directory_path + "/light_view_depth_generator.vert").c_str(),
-      std::string(shader_directory_path + "/light_view_depth_generator.frag").c_str()
+      std::string(shader_directory_path + "/depth/light_view_depth_generator.vert").c_str(),
+      std::string(shader_directory_path + "/depth/light_view_depth_generator.frag").c_str()
    );
    LightViewMomentsShader->setShader(
-      std::string(shader_directory_path + "/light_view_moments_generator.vert").c_str(),
-      std::string(shader_directory_path + "/light_view_moments_generator.frag").c_str()
+      std::string(shader_directory_path + "/depth/light_view_moments_generator.vert").c_str(),
+      std::string(shader_directory_path + "/depth/light_view_moments_generator.frag").c_str()
    );
    LightViewMomentsArrayShader->setShader(
-      std::string(shader_directory_path + "/light_view_moments_array_generator.vert").c_str(),
-      std::string(shader_directory_path + "/light_view_moments_array_generator.frag").c_str()
+      std::string(shader_directory_path + "/depth/light_view_moments_array_generator.vert").c_str(),
+      std::string(shader_directory_path + "/depth/light_view_moments_array_generator.frag").c_str()
    );
+   SATShader->setComputeShader( std::string(shader_directory_path + "/satvsm/sat_generator.comp").c_str() );
 }
 
 void RendererGL::writeFrame() const
@@ -118,22 +125,30 @@ void RendererGL::writeFrame() const
    delete [] buffer;
 }
 
-void RendererGL::writeDepthTexture() const
+void RendererGL::writeSATTexture() const
 {
    const int size = ShadowMapSize * ShadowMapSize;
    auto* buffer = new uint8_t[size];
-   auto* raw_buffer = new GLfloat[size];
-   glGetTextureImage( DepthTextureID, 0, GL_DEPTH_COMPONENT, GL_FLOAT, static_cast<GLsizei>(size * sizeof( GLfloat )), raw_buffer );
+   auto* raw_buffer = new GLfloat[size * 2];
+   glBindFramebuffer( GL_FRAMEBUFFER, MomentsFBO );
+   glNamedFramebufferReadBuffer( MomentsFBO, GL_COLOR_ATTACHMENT0 );
+   glReadPixels( 0, 0, ShadowMapSize, ShadowMapSize, GL_RG, GL_FLOAT, raw_buffer );
 
+   float max_value = 0.0f;
    for (int i = 0; i < size; ++i) {
-      buffer[i] = static_cast<uint8_t>(LightCamera->linearizeDepthValue( raw_buffer[i] ) * 255.0f);
+      max_value = std::max( max_value, raw_buffer[i * 2] );
+   }
+
+   const float inv_max_value = max_value > 0.0f ? 255.0f / max_value : 0.0f;
+   for (int i = 0; i < size; ++i) {
+      buffer[i] = static_cast<uint8_t>(raw_buffer[i * 2] * inv_max_value);
    }
 
    FIBITMAP* image = FreeImage_ConvertFromRawBits(
       buffer, ShadowMapSize, ShadowMapSize, ShadowMapSize, 8,
       FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK, false
    );
-   FreeImage_Save( FIF_PNG, image, "../depth.png" );
+   FreeImage_Save( FIF_PNG, image, "../sat.png" );
    FreeImage_Unload( image );
    delete [] raw_buffer;
    delete [] buffer;
@@ -192,11 +207,21 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
             std::cout << ">> Parallel-Split Variance Shadow Map Selected\n";
          }
          break;
+      case GLFW_KEY_4:
+         if (!Renderer->Pause) {
+            Renderer->AlgorithmToCompare = ALGORITHM_TO_COMPARE::SATVSM;
+            std::cout << ">> Summed Area Table Variance Shadow Map Selected\n";
+         }
+         break;
       case GLFW_KEY_C:
          Renderer->writeFrame();
+         std::cout << ">> Framebuffer Captured\n";
          break;
       case GLFW_KEY_D:
-         if (Renderer->AlgorithmToCompare == ALGORITHM_TO_COMPARE::PSVSM) Renderer->writeMomentsArrayTexture();
+         if (Renderer->AlgorithmToCompare == ALGORITHM_TO_COMPARE::PSVSM) {
+            Renderer->writeMomentsArrayTexture();
+            std::cout << ">> Split Depth Maps Captured\n";
+         }
          break;
       case GLFW_KEY_L:
          Renderer->Lights->toggleLightSwitch();
@@ -364,6 +389,13 @@ void RendererGL::setLightViewFrameBuffers()
    if (glCheckNamedFramebufferStatus( MomentsLayerFBO, GL_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE) {
       std::cerr << "MomentsLayerFBO Setup Error\n";
    }
+
+   glCreateTextures( GL_TEXTURE_2D, 1, &SATTextureID );
+   glTextureStorage2D( SATTextureID, 1, GL_RG32F, ShadowMapSize, ShadowMapSize );
+   glTextureParameteri( SATTextureID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR );
+   glTextureParameteri( SATTextureID, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+   glTextureParameteri( SATTextureID, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER );
+   glTextureParameteri( SATTextureID, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER );
 }
 
 void RendererGL::drawObject(ShaderGL* shader, CameraGL* camera) const
@@ -545,6 +577,37 @@ void RendererGL::calculateLightCropMatrices()
    }
 }
 
+void RendererGL::generateSummedAreaTable() const
+{
+   glm::ivec2 offsets(0, 0);
+   constexpr int samples = 4;
+   const int g = getGroupSize( ShadowMapSize );
+   glUseProgram( SATShader->getShaderProgram() );
+   SATShader->uniform1i( "Size", ShadowMapSize );
+
+   // MomentsTextureID must be set to GL_CLAMP_TO_BORDER with the border value 0.
+   glBindImageTexture( 0, SATTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
+   glBindImageTexture( 1, MomentsTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
+
+   for (int i = 1; i < ShadowMapSize; i *= samples) {
+      offsets.x = i;
+      SATShader->uniform2iv( "Offsets", offsets );
+      glDispatchCompute( g, g, 1 );
+      glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
+   }
+
+   offsets.x = 0;
+   glBindImageTexture( 0, MomentsTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
+   glBindImageTexture( 1, SATTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
+   for (int i = 1; i < ShadowMapSize; i *= samples) {
+      offsets.y = i;
+      SATShader->uniform2iv( "Offsets", offsets );
+      glDispatchCompute( g, g, 1 );
+      glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
+   }
+   writeSATTexture();
+}
+
 void RendererGL::drawShadowWithPCF() const
 {
    glViewport( 0, 0, FrameWidth, FrameHeight );
@@ -593,6 +656,13 @@ void RendererGL::drawShadowWithPSVSM() const
    glBindTextureUnit( 0, MomentsTextureArrayID );
    drawObject( PSVSMSceneShader.get(), MainCamera.get() );
    drawBoxObject( PSVSMSceneShader.get(), MainCamera.get() );
+}
+
+void RendererGL::drawShadowWithSATVSM() const
+{
+   glViewport( 0, 0, FrameWidth, FrameHeight );
+   glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+   glUseProgram( SATVSMSceneShader->getShaderProgram() );
 }
 
 void RendererGL::drawText(const std::string& text, glm::vec2 start_position) const
@@ -664,6 +734,11 @@ void RendererGL::render()
          drawMomentsArrayMapFromLightView();
          drawShadowWithPSVSM();
          break;
+      case ALGORITHM_TO_COMPARE::SATVSM:
+         drawMomentsMapFromLightView();
+         generateSummedAreaTable();
+         drawShadowWithSATVSM();
+         break;
    }
 
    std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
@@ -686,9 +761,11 @@ void RendererGL::play()
    PCFSceneShader->setSceneUniformLocations( 1 );
    VSMSceneShader->setSceneUniformLocations( 1 );
    PSVSMSceneShader->setPSSMSceneUniformLocations( 1 );
+   SATVSMSceneShader->setSceneUniformLocations( 1 );
    LightViewDepthShader->setLightViewUniformLocations();
    LightViewMomentsShader->setLightViewUniformLocations();
    LightViewMomentsArrayShader->setLightViewArrayUniformLocations();
+   SATShader->setSATUniformLocations();
 
    while (!glfwWindowShouldClose( Window )) {
       if (!Pause) render();

@@ -40,10 +40,11 @@ public:
       const char* tessellation_control_shader_path = nullptr,
       const char* tessellation_evaluation_shader_path = nullptr
    );
-   void setComputeShaders(const char* compute_shader_path);
+   void setComputeShader(const char* compute_shader_path);
    void setTextUniformLocations();
    void setLightViewUniformLocations();
    void setLightViewArrayUniformLocations();
+   void setSATUniformLocations();
    void setSceneUniformLocations(int light_num);
    void setPSSMSceneUniformLocations(int light_num);
    void addUniformLocation(const std::string& name)
@@ -66,6 +67,10 @@ public:
    void uniform1fv(const char* name, int count, const float* value) const
    {
       glProgramUniform1fv( ShaderProgram, CustomLocations.find( name )->second, count, value );
+   }
+   void uniform2iv(const char* name, const glm::ivec2& value) const
+   {
+      glProgramUniform2iv( ShaderProgram, CustomLocations.find( name )->second, 1, &value[0] );
    }
    void uniform2fv(const char* name, const glm::vec2& value) const
    {

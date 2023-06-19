@@ -102,7 +102,7 @@ void ShaderGL::setShader(
    if (tessellation_evaluation_shader != 0) glDeleteShader( tessellation_evaluation_shader );
 }
 
-void ShaderGL::setComputeShaders(const char* compute_shader_path)
+void ShaderGL::setComputeShader(const char* compute_shader_path)
 {
    const GLuint compute_shader = getCompiledShader( GL_COMPUTE_SHADER, compute_shader_path );
    ShaderProgram = glCreateProgram();
@@ -136,6 +136,12 @@ void ShaderGL::setLightViewArrayUniformLocations()
    setBasicTransformationUniforms();
    addUniformLocation( "TextureIndex" );
    addUniformLocation( "LightViewProjectionMatrix" );
+}
+
+void ShaderGL::setSATUniformLocations()
+{
+   addUniformLocation( "Size" );
+   addUniformLocation( "Offsets" );
 }
 
 void ShaderGL::setSceneUniformLocations(int light_num)

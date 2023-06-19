@@ -25,21 +25,20 @@ struct MateralInfo {
 };
 uniform MateralInfo Material;
 
-layout (binding = 0) uniform sampler2DArray MomentsMap;
+layout (binding = 0) uniform sampler2D MomentsMap;
 
 uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
-uniform mat4 LightViewProjectionMatrix[3];
-uniform float SplitPositions[3];
 uniform int UseLight;
 uniform int LightIndex;
 uniform int LightNum;
 uniform vec4 GlobalAmbient;
 
-in vec3 position_in_wc;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
+in vec2 tex_coord;
+in vec4 depth_map_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -73,10 +72,10 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
    return factor >= cos( radians( cutoff_angle ) ) ? pow( factor, Lights[light_index].SpotlightExponent ) : zero;
 }
 
-float getChebyshevUpperBound(in vec3 depth_map_coord, in int split)
+float getChebyshevUpperBound()
 {
    float t = depth_map_coord.z;
-   vec2 moments = texture( MomentsMap, vec3(depth_map_coord.xy, float(split)) ).rg;
+   vec2 moments = texture( MomentsMap, depth_map_coord.xy ).rg;
    if (t <= moments.x) return one;
 
    const float min_variance = 1e-6f;
@@ -91,32 +90,13 @@ float reduceLightBleeding(in float shadow)
    return clamp( (shadow - light_bleeding_reduction_amount) / (one - light_bleeding_reduction_amount), zero, one );
 }
 
-float getShadowWithPSVSM()
+float getShadowWithVSM()
 {
-   float depth = -position_in_ec.z;
-   vec3 split_positions = vec3(SplitPositions[0], SplitPositions[1], SplitPositions[2]);
-   int split = int(dot( vec3(one), vec3(greaterThan( vec3(depth), split_positions )) )) - 1;
-
-   // https://forum.beyond3d.com/threads/variance-shadow-maps-demo-d3d10.37062/
-   const int split_lookup[8] = { 0, 1, 1, 2, 2, 2, 2, 3 };
-   int power_of_two = 1 << split;
-   int split_x = int(abs( dFdx( power_of_two ) ));
-   int split_y = int(abs( dFdy( power_of_two ) ));
-   int split_xy = int(abs( dFdx( split_y ) ));
-   int split_max = max( split_xy, max( split_x, split_y ) );
-   // split_max = min( split_max, 8 );
-   split = split_max > 0 ? split_lookup[split_max - 1] : split;
-
-   const float bias_for_shadow_acne = 0.005f;
-   vec4 position_in_light = LightViewProjectionMatrix[split] * vec4(position_in_wc, 1.0f);
-   vec4 depth_map_coord = vec4(0.5f * position_in_light.xyz / position_in_light.w + 0.5f, position_in_light.w);
-   depth_map_coord.z -= bias_for_shadow_acne;
-
    const float epsilon = 1e-2f;
    if (epsilon <= depth_map_coord.x && depth_map_coord.x <= one - epsilon &&
        epsilon <= depth_map_coord.y && depth_map_coord.y <= one - epsilon &&
        zero < depth_map_coord.w) {
-      float shadow = getChebyshevUpperBound( depth_map_coord.xyz, split );
+      float shadow = getChebyshevUpperBound();
       return reduceLightBleeding( shadow );
    }
    return one;
@@ -154,7 +134,7 @@ vec4 calculateLightingEquation()
       pow( specular_intensity, Material.SpecularExponent ) * 
       Lights[LightIndex].SpecularColor * Material.SpecularColor;
 
-   color += local_color * getShadowWithPSVSM();
+   color += local_color * getShadowWithVSM();
    return color;
 }
 

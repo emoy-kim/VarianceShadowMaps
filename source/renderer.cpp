@@ -2,7 +2,7 @@
 
 RendererGL::RendererGL() :
    Window( nullptr ), Pause( false ), FrameWidth( 1920 ), FrameHeight( 1080 ), ShadowMapSize( 1024 ),
-   ActiveLightIndex( 0 ), SplitNum( 3 ), BoxHalfSide( 350.0f ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ),
+   ActiveLightIndex( 0 ), SplitNum( 3 ), BoxHalfSide( 500.0f ), DepthFBO( 0 ), DepthTextureID( 0 ), MomentsFBO( 0 ),
    MomentsTextureID( 0 ), MomentsLayerFBO( 0 ), MomentsTextureArrayID( 0 ), ClickedPoint( -1, -1 ),
    Texter( std::make_unique<TextGL>() ),
    MainCamera( std::make_unique<CameraGL>() ), TextCamera( std::make_unique<CameraGL>() ),
@@ -106,7 +106,6 @@ void RendererGL::writeFrame() const
 {
    const int size = FrameWidth * FrameHeight * 3;
    auto* buffer = new uint8_t[size];
-   glPixelStorei( GL_PACK_ALIGNMENT, 1 );
    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
    glNamedFramebufferReadBuffer( 0, GL_COLOR_ATTACHMENT0 );
    glReadPixels( 0, 0, FrameWidth, FrameHeight, GL_BGR, GL_UNSIGNED_BYTE, buffer );
@@ -145,7 +144,6 @@ void RendererGL::writeMomentsArrayTexture() const
    const int size = ShadowMapSize * ShadowMapSize;
    auto* buffer = new uint8_t[size];
    auto* raw_buffer = new GLfloat[size * 2];
-   glPixelStorei( GL_PACK_ALIGNMENT, 1 );
    glBindFramebuffer( GL_FRAMEBUFFER, MomentsLayerFBO );
    for (int s = 0; s < SplitNum; ++s) {
       glNamedFramebufferReadBuffer( MomentsLayerFBO, GL_COLOR_ATTACHMENT0 + s );
@@ -276,7 +274,7 @@ void RendererGL::registerCallbacks() const
 
 void RendererGL::setLights() const
 {
-   const glm::vec4 light_position(500.0f, 500.0f, 500.0f, 0.0f);
+   const glm::vec4 light_position(500.0f, 500.0f, -200.0f, 0.0f);
    const glm::vec4 ambient_color(1.0f, 1.0f, 1.0f, 1.0f);
    const glm::vec4 diffuse_color(0.9f, 0.9f, 0.9f, 1.0f);
    const glm::vec4 specular_color(0.9f, 0.9f, 0.9f, 1.0f);
@@ -370,38 +368,35 @@ void RendererGL::setLightViewFrameBuffers()
 
 void RendererGL::drawObject(ShaderGL* shader, CameraGL* camera) const
 {
-   const glm::mat4 to_world = glm::scale( glm::mat4(1.0f), glm::vec3(100.0f) );
-   shader->transferBasicTransformationUniforms( to_world, camera );
-   Object->transferUniformsToShader( shader );
-
    glBindVertexArray( Object->getVAO() );
    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Object->getIBO() );
+   Object->transferUniformsToShader( shader );
+
+   glm::mat4 to_world =
+      glm::translate( glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, -200.0f) ) *
+      glm::scale( glm::mat4(1.0f), glm::vec3(50.0f) );
+   shader->transferBasicTransformationUniforms( to_world, camera );
+   glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
+
+   to_world =
+      glm::translate( glm::mat4(1.0f), glm::vec3(-100.0f, 0.0f, 0.0f) ) *
+      glm::scale( glm::mat4(1.0f), glm::vec3(50.0f) );
+   shader->transferBasicTransformationUniforms( to_world, camera );
+   glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
+
+   to_world =
+      glm::translate( glm::mat4(1.0f), glm::vec3(300.0f, 0.0f, 250.0f) ) *
+      glm::scale( glm::mat4(1.0f), glm::vec3(50.0f) );
+   shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 }
 
 void RendererGL::drawBoxObject(ShaderGL* shader, const CameraGL* camera) const
 {
-   glm::mat4 to_world(1.0f);
-   shader->transferBasicTransformationUniforms( to_world, camera );
-   WallObject->setDiffuseReflectionColor( { 0.27f, 0.49f, 0.81f, 1.0f } );
-   WallObject->transferUniformsToShader( shader );
-   glBindVertexArray( WallObject->getVAO() );
-   glDrawArrays( WallObject->getDrawMode(), 0, WallObject->getVertexNum() );
-
-   to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(0.0f, BoxHalfSide, -BoxHalfSide) ) *
-      glm::rotate( glm::mat4(1.0f), glm::radians( 90.0f ), glm::vec3(1.0f, 0.0f, 0.0f) );
-   shader->transferBasicTransformationUniforms( to_world, camera );
-   WallObject->setDiffuseReflectionColor( { 0.32f, 0.81f, 0.29f, 1.0f } );
-   WallObject->transferUniformsToShader( shader );
-   glDrawArrays( WallObject->getDrawMode(), 0, WallObject->getVertexNum() );
-
-   to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(-BoxHalfSide, BoxHalfSide, 0.0f) ) *
-      glm::rotate( glm::mat4(1.0f), glm::radians( -90.0f ), glm::vec3(0.0f, 0.0f, 1.0f) );
-   shader->transferBasicTransformationUniforms( to_world, camera );
+   shader->transferBasicTransformationUniforms( glm::mat4(1.0f), camera );
    WallObject->setDiffuseReflectionColor( { 0.83f, 0.35f, 0.29f, 1.0f } );
    WallObject->transferUniformsToShader( shader );
+   glBindVertexArray( WallObject->getVAO() );
    glDrawArrays( WallObject->getDrawMode(), 0, WallObject->getVertexNum() );
 }
 
@@ -648,7 +643,7 @@ void RendererGL::render()
 
    LightCamera->updateCameraView(
       glm::vec3(Lights->getLightPosition( ActiveLightIndex )),
-      glm::vec3(-1.0f, -1.0f, 0.0f),
+      glm::vec3(0.0f, 0.0f, 0.0f),
       glm::vec3(0.0f, 1.0f, 0.0f)
    );
 

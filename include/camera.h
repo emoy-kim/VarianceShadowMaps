@@ -11,8 +11,8 @@ public:
       const glm::vec3& view_reference_position,
       const glm::vec3& view_up_vector,
       float fov = 70.0f,
-      float near_plane = 1.0f,
-      float far_plane = 1500.0f
+      float near_plane = 100.0f,
+      float far_plane = 2000.0f
    );
    ~CameraGL() = default;
 

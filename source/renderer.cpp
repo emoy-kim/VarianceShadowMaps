@@ -223,6 +223,12 @@ void RendererGL::keyboard(GLFWwindow* window, int key, int scancode, int action,
             std::cout << ">> Split Depth Maps Captured\n";
          }
          break;
+      case GLFW_KEY_S:
+         if (Renderer->AlgorithmToCompare == ALGORITHM_TO_COMPARE::SATVSM) {
+            Renderer->writeSATTexture();
+            std::cout << ">> SAT Texture Captured\n";
+         }
+         break;
       case GLFW_KEY_L:
          Renderer->Lights->toggleLightSwitch();
          std::cout << ">> Light Turned " << (Renderer->Lights->isLightOn() ? "On!\n" : "Off!\n");
@@ -585,27 +591,31 @@ void RendererGL::generateSummedAreaTable() const
    glUseProgram( SATShader->getShaderProgram() );
    SATShader->uniform1i( "Size", ShadowMapSize );
 
-   // MomentsTextureID must be set to GL_CLAMP_TO_BORDER with the border value 0.
-   glBindImageTexture( 0, SATTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
-   glBindImageTexture( 1, MomentsTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
-
+   // textures must be set to GL_CLAMP_TO_BORDER with the border value 0.
+   int t = 0;
+   const std::array<GLuint, 2> textures = { SATTextureID, MomentsTextureID };
    for (int i = 1; i < ShadowMapSize; i *= samples) {
       offsets.x = i;
       SATShader->uniform2iv( "Offsets", offsets );
+      glBindImageTexture( 0, textures[t], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
+      glBindImageTexture( 1, textures[t ^ 1], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
       glDispatchCompute( g, g, 1 );
       glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
+      t ^= 1;
    }
 
    offsets.x = 0;
-   glBindImageTexture( 0, MomentsTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
-   glBindImageTexture( 1, SATTextureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
    for (int i = 1; i < ShadowMapSize; i *= samples) {
       offsets.y = i;
       SATShader->uniform2iv( "Offsets", offsets );
+      glBindImageTexture( 0, textures[t], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
+      glBindImageTexture( 1, textures[t ^ 1], 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F );
       glDispatchCompute( g, g, 1 );
       glMemoryBarrier( GL_SHADER_IMAGE_ACCESS_BARRIER_BIT );
+      t ^= 1;
    }
-   writeSATTexture();
+
+   assert( t == 0 );
 }
 
 void RendererGL::drawShadowWithPCF() const
@@ -663,6 +673,16 @@ void RendererGL::drawShadowWithSATVSM() const
    glViewport( 0, 0, FrameWidth, FrameHeight );
    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
    glUseProgram( SATVSMSceneShader->getShaderProgram() );
+
+   Lights->transferUniformsToShader( SATVSMSceneShader.get() );
+   SATVSMSceneShader->uniform1i( "LightIndex", ActiveLightIndex );
+
+   const glm::mat4 view_projection = LightCamera->getProjectionMatrix() * LightCamera->getViewMatrix();
+   SATVSMSceneShader->uniformMat4fv( "LightViewProjectionMatrix", view_projection );
+
+   glBindTextureUnit( 0, MomentsTextureID );
+   drawObject( SATVSMSceneShader.get(), MainCamera.get() );
+   drawBoxObject( SATVSMSceneShader.get(), MainCamera.get() );
 }
 
 void RendererGL::drawText(const std::string& text, glm::vec2 start_position) const

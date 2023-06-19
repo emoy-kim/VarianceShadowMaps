@@ -93,9 +93,9 @@ float reduceLightBleeding(in float shadow)
 
 float getShadowWithPSVSM()
 {
-   float slice_depth = -position_in_ec.z;
+   float depth = -position_in_ec.z;
    vec3 split_positions = vec3(SplitPositions[0], SplitPositions[1], SplitPositions[2]);
-   int split = int(dot( vec3(one), vec3(greaterThan( vec3(slice_depth), split_positions )) ));
+   int split = int(dot( vec3(one), vec3(greaterThan( vec3(depth), split_positions )) )) - 1;
 
    const int split_lookup[8] = { 0, 1, 1, 2, 2, 2, 2, 3 };
    int power_of_two = 1 << split;
@@ -104,7 +104,7 @@ float getShadowWithPSVSM()
    int split_xy = int(abs( dFdx( split_y ) ));
    int split_max = max( split_xy, max( split_x, split_y ) );
    // split_max = min( split_max, 8 );
-   split = split_max > 0 ? split_lookup[split_max - 1] : split - 1;
+   split = split_max > 0 ? split_lookup[split_max - 1] : split;
 
    const float bias_for_shadow_acne = 0.005f;
    vec4 position_in_light = LightViewProjectionMatrix[split] * vec4(position_in_wc, 1.0f);

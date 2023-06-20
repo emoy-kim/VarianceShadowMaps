@@ -72,10 +72,28 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
    return factor >= cos( radians( cutoff_angle ) ) ? pow( factor, Lights[light_index].SpotlightExponent ) : zero;
 }
 
-float getChebyshevUpperBound()
+vec2 getMomentsFromSAT(in ivec4 coord, in ivec2 offset)
 {
+   vec2 s00 = texelFetchOffset( MomentsMap, coord.xy, 0, offset ).rg;
+   vec2 s10 = texelFetchOffset( MomentsMap, coord.zy, 0, offset ).rg;
+   vec2 s01 = texelFetchOffset( MomentsMap, coord.xw, 0, offset ).rg;
+   vec2 s11 = texelFetchOffset( MomentsMap, coord.zw, 0, offset ).rg;
+   return s11 - s01 - s10 + s00;
+}
+
+float getChebyshevUpperBound(in ivec4 tile, in vec4 weights)
+{
+   vec2 filter_size = vec2(tile.zw - tile.xy);
+   float normalizer = one / (filter_size.x * filter_size.y);
+   vec2 m00 = getMomentsFromSAT( tile, ivec2(0) ) * normalizer;
+   vec2 m10 = getMomentsFromSAT( tile, ivec2(1, 0) ) * normalizer;
+   vec2 m01 = getMomentsFromSAT( tile, ivec2(0, 1) ) * normalizer;
+   vec2 m11 = getMomentsFromSAT( tile, ivec2(1) ) * normalizer;
+   vec2 moments = vec2(
+      dot( weights, vec4(m10.x, m01.x, m11.x, m00.x) ),
+      dot( weights, vec4(m10.y, m01.y, m11.y, m00.y) )
+   );
    float t = depth_map_coord.z;
-   vec2 moments = texture( MomentsMap, depth_map_coord.xy ).rg;
    if (t <= moments.x) return one;
 
    const float min_variance = 1e-6f;
@@ -90,13 +108,25 @@ float reduceLightBleeding(in float shadow)
    return clamp( (shadow - light_bleeding_reduction_amount) / (one - light_bleeding_reduction_amount), zero, one );
 }
 
-float getShadowWithVSM()
+float getShadowWithSATVSM()
 {
+   vec2 dx = dFdx( depth_map_coord.xy );
+   vec2 dy = dFdy( depth_map_coord.xy );
+
    const float epsilon = 1e-2f;
+   const vec2 min_size = vec2(one);
    if (epsilon <= depth_map_coord.x && depth_map_coord.x <= one - epsilon &&
        epsilon <= depth_map_coord.y && depth_map_coord.y <= one - epsilon &&
        zero < depth_map_coord.w) {
-      float shadow = getChebyshevUpperBound();
+      vec2 shadow_size = vec2(textureSize( MomentsMap, 0 ));
+      vec2 filter_size = round( clamp( 2.0f * (abs( dx ) + abs( dy )) * shadow_size, min_size, shadow_size ) );
+      vec2 lower_left = depth_map_coord.xy * shadow_size - 0.5f * filter_size;
+      vec4 weights;
+      weights.xy = fract( lower_left );
+      weights.zw = one - weights.xy;
+      weights = weights.xzxz * weights.wyyw;
+      ivec4 tile = ivec4(lower_left, lower_left + filter_size);
+      float shadow = getChebyshevUpperBound( tile, weights );
       return reduceLightBleeding( shadow );
    }
    return one;
@@ -134,7 +164,7 @@ vec4 calculateLightingEquation()
       pow( specular_intensity, Material.SpecularExponent ) * 
       Lights[LightIndex].SpecularColor * Material.SpecularColor;
 
-   color += local_color * getShadowWithVSM();
+   color += local_color * getShadowWithSATVSM();
    return color;
 }
 

@@ -38,7 +38,7 @@ uniform vec4 GlobalAmbient;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
 in vec2 tex_coord;
-in vec4 depth_map_coord;
+in vec4 moments_map_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -74,8 +74,8 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
 
 float getChebyshevUpperBound()
 {
-   float t = depth_map_coord.z;
-   vec2 moments = texture( MomentsMap, depth_map_coord.xy ).rg;
+   float t = moments_map_coord.z;
+   vec2 moments = texture( MomentsMap, moments_map_coord.xy ).rg;
    if (t <= moments.x) return one;
 
    const float min_variance = 1e-6f;
@@ -93,9 +93,9 @@ float reduceLightBleeding(in float shadow)
 float getShadowWithVSM()
 {
    const float epsilon = 1e-2f;
-   if (epsilon <= depth_map_coord.x && depth_map_coord.x <= one - epsilon &&
-       epsilon <= depth_map_coord.y && depth_map_coord.y <= one - epsilon &&
-       zero < depth_map_coord.w) {
+   if (epsilon <= moments_map_coord.x && moments_map_coord.x <= one - epsilon &&
+       epsilon <= moments_map_coord.y && moments_map_coord.y <= one - epsilon &&
+       zero < moments_map_coord.w) {
       float shadow = getChebyshevUpperBound();
       return reduceLightBleeding( shadow );
    }

@@ -73,10 +73,10 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
    return factor >= cos( radians( cutoff_angle ) ) ? pow( factor, Lights[light_index].SpotlightExponent ) : zero;
 }
 
-float getChebyshevUpperBound(in vec3 depth_map_coord, in int split)
+float getChebyshevUpperBound(in vec3 moments_map_coord, in int split)
 {
-   float t = depth_map_coord.z;
-   vec2 moments = texture( MomentsMap, vec3(depth_map_coord.xy, float(split)) ).rg;
+   float t = moments_map_coord.z;
+   vec2 moments = texture( MomentsMap, vec3(moments_map_coord.xy, float(split)) ).rg;
    if (t <= moments.x) return one;
 
    const float min_variance = 1e-6f;
@@ -109,14 +109,14 @@ float getShadowWithPSVSM()
 
    const float bias_for_shadow_acne = 0.005f;
    vec4 position_in_light = LightViewProjectionMatrix[split] * vec4(position_in_wc, 1.0f);
-   vec4 depth_map_coord = vec4(0.5f * position_in_light.xyz / position_in_light.w + 0.5f, position_in_light.w);
-   depth_map_coord.z -= bias_for_shadow_acne;
+   vec4 moments_map_coord = vec4(0.5f * position_in_light.xyz / position_in_light.w + 0.5f, position_in_light.w);
+   moments_map_coord.z -= bias_for_shadow_acne;
 
    const float epsilon = 1e-2f;
-   if (epsilon <= depth_map_coord.x && depth_map_coord.x <= one - epsilon &&
-       epsilon <= depth_map_coord.y && depth_map_coord.y <= one - epsilon &&
-       zero < depth_map_coord.w) {
-      float shadow = getChebyshevUpperBound( depth_map_coord.xyz, split );
+   if (epsilon <= moments_map_coord.x && moments_map_coord.x <= one - epsilon &&
+       epsilon <= moments_map_coord.y && moments_map_coord.y <= one - epsilon &&
+       zero < moments_map_coord.w) {
+      float shadow = getChebyshevUpperBound( moments_map_coord.xyz, split );
       return reduceLightBleeding( shadow );
    }
    return one;

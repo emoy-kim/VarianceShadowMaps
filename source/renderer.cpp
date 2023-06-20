@@ -65,7 +65,7 @@ void RendererGL::initialize()
 
    glEnable( GL_CULL_FACE );
    glEnable( GL_DEPTH_TEST );
-   glClearColor( 0.4f, 0.5f, 0.6f, 1.0f );
+   glClearColor( 0.094, 0.07f, 0.17f, 1.0f );
 
    Texter->initialize( 30.0f );
 
@@ -305,7 +305,7 @@ void RendererGL::registerCallbacks() const
 
 void RendererGL::setLights() const
 {
-   const glm::vec4 light_position(500.0f, 500.0f, -200.0f, 0.0f);
+   const glm::vec4 light_position(500.0f, 500.0f, 700.0f, 0.0f);
    const glm::vec4 ambient_color(1.0f, 1.0f, 1.0f, 1.0f);
    const glm::vec4 diffuse_color(0.9f, 0.9f, 0.9f, 1.0f);
    const glm::vec4 specular_color(0.9f, 0.9f, 0.9f, 1.0f);
@@ -317,7 +317,7 @@ void RendererGL::setObject() const
    const std::string sample_directory_path = std::string(CMAKE_SOURCE_DIR) + "/samples";
    Object->setObject(
       GL_TRIANGLES,
-      std::string(sample_directory_path + "/Panda/panda.obj")
+      std::string(sample_directory_path + "/Buddha/buddha.obj")
    );
    Object->setDiffuseReflectionColor( { 1.0f, 1.0f, 1.0f, 1.0f } );
 }
@@ -343,7 +343,7 @@ void RendererGL::setWallObject() const
    wall_normals.emplace_back( 0.0f, 1.0f, 0.0f );
 
    WallObject->setObject( GL_TRIANGLES, wall_vertices, wall_normals );
-   WallObject->setDiffuseReflectionColor( { 1.0f, 1.0f, 1.0f, 1.0f } );
+   WallObject->setDiffuseReflectionColor( { 0.39f, 0.35f, 0.52f, 1.0f } );
 }
 
 void RendererGL::setLightViewFrameBuffers()
@@ -410,21 +410,19 @@ void RendererGL::drawObject(ShaderGL* shader, CameraGL* camera) const
    glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, Object->getIBO() );
    Object->transferUniformsToShader( shader );
 
-   glm::mat4 to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, -200.0f) ) *
-      glm::scale( glm::mat4(1.0f), glm::vec3(50.0f) );
+   const glm::mat4 to_object =
+      glm::translate( glm::mat4(1.0f), glm::vec3(0.0f, 80.0f, 0.0f) ) *
+      glm::rotate( glm::mat4(1.0f), glm::radians( -90.0f ), glm::vec3(1.0f, 0.0f, 0.0f) ) *
+      glm::scale( glm::mat4(1.0f), glm::vec3(0.3f) );
+   glm::mat4 to_world = glm::translate( glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, -200.0f) ) * to_object;
    shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 
-   to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(-100.0f, 0.0f, 0.0f) ) *
-      glm::scale( glm::mat4(1.0f), glm::vec3(50.0f) );
+   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(-100.0f, 0.0f, 0.0f) ) * to_object;
    shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 
-   to_world =
-      glm::translate( glm::mat4(1.0f), glm::vec3(300.0f, 0.0f, 250.0f) ) *
-      glm::scale( glm::mat4(1.0f), glm::vec3(50.0f) );
+   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(300.0f, 0.0f, 250.0f) ) * to_object;
    shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 }
@@ -432,7 +430,6 @@ void RendererGL::drawObject(ShaderGL* shader, CameraGL* camera) const
 void RendererGL::drawBoxObject(ShaderGL* shader, const CameraGL* camera) const
 {
    shader->transferBasicTransformationUniforms( glm::mat4(1.0f), camera );
-   WallObject->setDiffuseReflectionColor( { 0.83f, 0.35f, 0.29f, 1.0f } );
    WallObject->transferUniformsToShader( shader );
    glBindVertexArray( WallObject->getVAO() );
    glDrawArrays( WallObject->getDrawMode(), 0, WallObject->getVertexNum() );

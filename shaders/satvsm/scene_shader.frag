@@ -38,7 +38,7 @@ uniform vec4 GlobalAmbient;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
 in vec2 tex_coord;
-in vec4 depth_map_coord;
+in vec4 moments_map_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -93,10 +93,10 @@ float getChebyshevUpperBound(in ivec4 tile, in vec4 weights)
       dot( weights, vec4(m10.x, m01.x, m11.x, m00.x) ),
       dot( weights, vec4(m10.y, m01.y, m11.y, m00.y) )
    );
-   float t = depth_map_coord.z;
+   float t = moments_map_coord.z;
    if (t <= moments.x) return one;
 
-   const float min_variance = 1e-6f;
+   const float min_variance = 1e-4f;
    float variance = max( moments.y - moments.x * moments.x, min_variance );
    float d = t - moments.x;
    return variance / (variance + d * d);
@@ -110,22 +110,30 @@ float reduceLightBleeding(in float shadow)
 
 float getShadowWithSATVSM()
 {
-   vec2 dx = dFdx( depth_map_coord.xy );
-   vec2 dy = dFdy( depth_map_coord.xy );
+   vec2 dx = dFdx( moments_map_coord.xy );
+   vec2 dy = dFdy( moments_map_coord.xy );
 
-   const float epsilon = 1e-2f;
+   const float epsilon = 1e-1f;
    const vec2 min_size = vec2(one);
-   if (epsilon <= depth_map_coord.x && depth_map_coord.x <= one - epsilon &&
-       epsilon <= depth_map_coord.y && depth_map_coord.y <= one - epsilon &&
-       zero < depth_map_coord.w) {
+   if (epsilon <= moments_map_coord.x && moments_map_coord.x <= one - epsilon &&
+       epsilon <= moments_map_coord.y && moments_map_coord.y <= one - epsilon &&
+       zero < moments_map_coord.w) {
       vec2 shadow_size = vec2(textureSize( MomentsMap, 0 ));
-      vec2 filter_size = round( clamp( 2.0f * (abs( dx ) + abs( dy )) * shadow_size, min_size, shadow_size ) );
-      vec2 lower_left = depth_map_coord.xy * shadow_size - 0.5f * filter_size;
+
+      // this filter is designed to reduce artifacts causing when the filter size from pcf is used.
+      // the filter size gets increased when the camera is closer to hide artifacts.
+      vec2 filter_size = smoothstep( 1.05f - abs( dx ) - abs( dy ), vec2(zero), vec2(one) );
+      filter_size = round( clamp( filter_size * shadow_size, min_size, shadow_size ) );
+      //vec2 filter_size = round( clamp( 2.0f * (abs( dx ) + abs( dy )) * shadow_size, min_size, max_size ) );
+
+      vec2 lower_left = moments_map_coord.xy * shadow_size - 0.5f * filter_size;
+      vec2 upper_right = lower_left + filter_size;
+      ivec4 tile = ivec4(lower_left, upper_right);
+
       vec4 weights;
       weights.xy = fract( lower_left );
       weights.zw = one - weights.xy;
       weights = weights.xzxz * weights.wyyw;
-      ivec4 tile = ivec4(lower_left, lower_left + filter_size);
       float shadow = getChebyshevUpperBound( tile, weights );
       return reduceLightBleeding( shadow );
    }

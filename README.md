@@ -4,7 +4,7 @@
   
   Please refer to [this](https://jeesunkim.com/projects/gpu-gems/ambient_occlusion/) to see the details.
   
-![result_merged](https://github.com/emoy-kim/AmbientOcclusion/assets/17864157/7ddd4432-5cb6-40e5-bb0d-05c21e444977)
+![result_merged](https://github.com/emoy-kim/VarianceShadowMaps/assets/17864157/2a041e11-4e79-49bd-8300-8fda1526d8a4)
 
 ## Keyboard Commands
   * **1 key**: select Percentage-Closer Filtering(PCF)

@@ -96,7 +96,7 @@ float getChebyshevUpperBound(in ivec4 tile, in vec4 weights)
    float t = moments_map_coord.z;
    if (t <= moments.x) return one;
 
-   const float min_variance = 1e-4f;
+   const float min_variance = 3e-4f;
    float variance = max( moments.y - moments.x * moments.x, min_variance );
    float d = t - moments.x;
    return variance / (variance + d * d);

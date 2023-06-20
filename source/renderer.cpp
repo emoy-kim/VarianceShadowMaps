@@ -766,6 +766,10 @@ void RendererGL::render()
    const auto fps = 1E+6 / static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());
 
    std::stringstream text;
+   if (AlgorithmToCompare == ALGORITHM_TO_COMPARE::PCF) text << "Percentage-Closer Filtering\n";
+   else if (AlgorithmToCompare == ALGORITHM_TO_COMPARE::VSM) text << "Variance Shadow Map\n";
+   else if (AlgorithmToCompare == ALGORITHM_TO_COMPARE::PSVSM) text << "Parallel-Split Variance Shadow Map\n";
+   else if (AlgorithmToCompare == ALGORITHM_TO_COMPARE::SATVSM) text << "Summed Area Table Variance Shadow Map\n";
    text << std::fixed << std::setprecision( 2 ) << fps << " fps";
    drawText( text.str(), { 80.0f, 100.0f } );
 }

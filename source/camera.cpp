@@ -2,7 +2,7 @@
 
 CameraGL::CameraGL() :
    CameraGL(
-      glm::vec3(200.0f, 100.0f, 500.0f),
+      glm::vec3(-85.0f, 195.0f, 415.0f),
       glm::vec3(0.0f, 50.0f, 0.0f),
       glm::vec3(0.0f, 1.0f, 0.0f)
    )

@@ -414,15 +414,19 @@ void RendererGL::drawObject(ShaderGL* shader, CameraGL* camera) const
       glm::translate( glm::mat4(1.0f), glm::vec3(0.0f, 80.0f, 0.0f) ) *
       glm::rotate( glm::mat4(1.0f), glm::radians( -90.0f ), glm::vec3(1.0f, 0.0f, 0.0f) ) *
       glm::scale( glm::mat4(1.0f), glm::vec3(0.3f) );
-   glm::mat4 to_world = glm::translate( glm::mat4(1.0f), glm::vec3(100.0f, 0.0f, -200.0f) ) * to_object;
+   glm::mat4 to_world = glm::translate( glm::mat4(1.0f), glm::vec3(350.0f, 0.0f, 0.0f) ) * to_object;
    shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 
-   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(-100.0f, 0.0f, 0.0f) ) * to_object;
+   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(-250.0f, 0.0f, 0.0f) ) * to_object;
    shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 
-   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(300.0f, 0.0f, 250.0f) ) * to_object;
+   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(50.0f, 0.0f, -100.0f) ) * to_object;
+   shader->transferBasicTransformationUniforms( to_world, camera );
+   glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
+
+   to_world = glm::translate( glm::mat4(1.0f), glm::vec3(50.0f, 0.0f, 200.0f) ) * to_object;
    shader->transferBasicTransformationUniforms( to_world, camera );
    glDrawElements( Object->getDrawMode(), Object->getIndexNum(), GL_UNSIGNED_INT, nullptr );
 }

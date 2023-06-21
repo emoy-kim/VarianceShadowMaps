@@ -107,10 +107,8 @@ float getShadowWithPSVSM()
    // split_max = min( split_max, 8 );
    split = split_max > 0 ? split_lookup[split_max - 1] : split;
 
-   const float bias_for_shadow_acne = 0.005f;
    vec4 position_in_light = LightViewProjectionMatrix[split] * vec4(position_in_wc, 1.0f);
    vec4 moments_map_coord = vec4(0.5f * position_in_light.xyz / position_in_light.w + 0.5f, position_in_light.w);
-   moments_map_coord.z -= bias_for_shadow_acne;
 
    const float epsilon = 1e-2f;
    if (epsilon <= moments_map_coord.x && moments_map_coord.x <= one - epsilon &&

@@ -27,10 +27,8 @@ void main()
 
    tex_coord = v_tex_coord;
 
-   const float bias_for_shadow_acne = 0.005f;
    vec4 position_in_light_cc = LightViewProjectionMatrix * WorldMatrix * vec4(v_position, 1.0f);
    moments_map_coord.xyz = 0.5f * position_in_light_cc.xyz / position_in_light_cc.w + 0.5f;
-   moments_map_coord.z -= bias_for_shadow_acne;
    moments_map_coord.w = position_in_light_cc.w;
 
    gl_Position = ModelViewProjectionMatrix * vec4(v_position, 1.0f);

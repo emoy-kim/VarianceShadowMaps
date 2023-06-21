@@ -115,7 +115,8 @@ float getShadowWithPSVSM()
        epsilon <= moments_map_coord.y && moments_map_coord.y <= one - epsilon &&
        zero < moments_map_coord.w) {
       float shadow = getChebyshevUpperBound( moments_map_coord.xyz, split );
-      return reduceLightBleeding( shadow );
+      //return reduceLightBleeding( shadow );
+      return shadow;
    }
    return one;
 }

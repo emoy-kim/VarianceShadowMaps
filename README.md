@@ -2,9 +2,9 @@
 
   This code is about variance shadow maps from GPU Gems 3.
   
-  Please refer to [this](https://jeesunkim.com/projects/gpu-gems/ambient_occlusion/) to see the details.
+  Please refer to [this](https://jeesunkim.com/projects/gpu-gems/variance_shadow_maps/) to see the details.
   
-![result_merged](https://github.com/emoy-kim/VarianceShadowMaps/assets/17864157/2a041e11-4e79-49bd-8300-8fda1526d8a4)
+![result_merged](https://github.com/emoy-kim/VarianceShadowMaps/assets/17864157/555c473d-79ec-4742-844d-4987f891ed0b)
 
 ## Keyboard Commands
   * **1 key**: select Percentage-Closer Filtering(PCF)

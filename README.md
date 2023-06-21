@@ -14,6 +14,6 @@
   * **l key**: toggle light effects
   * **c key**: capture the current frame
   * **d key**: capture the depth maps when _PSVSM is selected_
-  * **s key**: capture the summed area table when _SATVSM_ is selected_
+  * **s key**: capture the summed area table when _SATVSM is selected_
   * **SPACE key**: pause rendering
   * **q/ESC key**: exit

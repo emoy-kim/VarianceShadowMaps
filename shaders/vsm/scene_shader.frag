@@ -30,15 +30,16 @@ layout (binding = 0) uniform sampler2D MomentsMap;
 uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
+uniform mat4 LightViewProjectionMatrix;
 uniform int UseLight;
 uniform int LightIndex;
 uniform int LightNum;
 uniform vec4 GlobalAmbient;
 
+in vec4 position_in_wc;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
 in vec2 tex_coord;
-in vec4 moments_map_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -72,7 +73,7 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
    return factor >= cos( radians( cutoff_angle ) ) ? pow( factor, Lights[light_index].SpotlightExponent ) : zero;
 }
 
-float getChebyshevUpperBound()
+float getChebyshevUpperBound(in vec3 moments_map_coord)
 {
    float t = moments_map_coord.z;
    vec2 moments = texture( MomentsMap, moments_map_coord.xy ).rg;
@@ -92,11 +93,17 @@ float reduceLightBleeding(in float shadow)
 
 float getShadowWithVSM()
 {
+   vec4 position_in_light_cc = LightViewProjectionMatrix * position_in_wc;
+   vec4 moments_map_coord = vec4(
+      0.5f * position_in_light_cc.xyz / position_in_light_cc.w + 0.5f,
+      position_in_light_cc.w
+   );
+
    const float epsilon = 1e-2f;
    if (epsilon <= moments_map_coord.x && moments_map_coord.x <= one - epsilon &&
        epsilon <= moments_map_coord.y && moments_map_coord.y <= one - epsilon &&
        zero < moments_map_coord.w) {
-      float shadow = getChebyshevUpperBound();
+      float shadow = getChebyshevUpperBound( moments_map_coord.xyz );
       //return reduceLightBleeding( shadow );
       return shadow;
    }

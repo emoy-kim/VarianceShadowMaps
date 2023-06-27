@@ -30,15 +30,16 @@ layout (binding = 0) uniform sampler2DShadow DepthMap;
 uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
+uniform mat4 LightViewProjectionMatrix;
 uniform int UseLight;
 uniform int LightIndex;
 uniform int LightNum;
 uniform vec4 GlobalAmbient;
 
+in vec4 position_in_wc;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
 in vec2 tex_coord;
-in vec4 depth_map_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -74,6 +75,14 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
 
 float getShadowWithPCF()
 {
+   const float bias_for_shadow_acne = 0.005f;
+   vec4 position_in_light_cc = LightViewProjectionMatrix * position_in_wc;
+   vec4 depth_map_coord = vec4(
+      0.5f * position_in_light_cc.xyz / position_in_light_cc.w + 0.5f,
+      position_in_light_cc.w
+   );
+   depth_map_coord.z -= bias_for_shadow_acne;
+
    vec2 dx = dFdx( depth_map_coord.xy );
    vec2 dy = dFdy( depth_map_coord.xy );
 

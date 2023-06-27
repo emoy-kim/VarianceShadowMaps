@@ -30,15 +30,16 @@ layout (binding = 0) uniform sampler2D MomentsMap;
 uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
+uniform mat4 LightViewProjectionMatrix;
 uniform int UseLight;
 uniform int LightIndex;
 uniform int LightNum;
 uniform vec4 GlobalAmbient;
 
+in vec4 position_in_wc;
 in vec3 position_in_ec;
 in vec3 normal_in_ec;
 in vec2 tex_coord;
-in vec4 moments_map_coord;
 
 layout (location = 0) out vec4 final_color;
 
@@ -81,7 +82,7 @@ vec2 getMomentsFromSAT(in ivec4 coord, in ivec2 offset)
    return s11 - s01 - s10 + s00;
 }
 
-float getChebyshevUpperBound(in ivec4 tile, in vec4 weights)
+float getChebyshevUpperBound(in ivec4 tile, in vec4 weights, in float t)
 {
    vec2 filter_size = vec2(tile.zw - tile.xy);
    float normalizer = one / (filter_size.x * filter_size.y);
@@ -93,7 +94,6 @@ float getChebyshevUpperBound(in ivec4 tile, in vec4 weights)
       dot( weights, vec4(m10.x, m01.x, m11.x, m00.x) ),
       dot( weights, vec4(m10.y, m01.y, m11.y, m00.y) )
    );
-   float t = moments_map_coord.z;
    if (t <= moments.x) return one;
 
    const float min_variance = 3e-4f;
@@ -110,6 +110,12 @@ float reduceLightBleeding(in float shadow)
 
 float getShadowWithSATVSM()
 {
+   vec4 position_in_light_cc = LightViewProjectionMatrix * position_in_wc;
+   vec4 moments_map_coord = vec4(
+      0.5f * position_in_light_cc.xyz / position_in_light_cc.w + 0.5f,
+      position_in_light_cc.w
+   );
+
    vec2 dx = dFdx( moments_map_coord.xy );
    vec2 dy = dFdy( moments_map_coord.xy );
 
@@ -134,7 +140,7 @@ float getShadowWithSATVSM()
       weights.xy = fract( lower_left );
       weights.zw = one - weights.xy;
       weights = weights.xzxz * weights.wyyw;
-      float shadow = getChebyshevUpperBound( tile, weights );
+      float shadow = getChebyshevUpperBound( tile, weights, moments_map_coord.z );
       return reduceLightBleeding( shadow );
    }
    return one;

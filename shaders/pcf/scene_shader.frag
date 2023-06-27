@@ -27,7 +27,6 @@ uniform MateralInfo Material;
 
 layout (binding = 0) uniform sampler2DShadow DepthMap;
 
-uniform mat4 WorldMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
 uniform mat4 LightViewProjectionMatrix;
@@ -64,9 +63,7 @@ float getSpotlightFactor(in vec3 normalized_light_vector, in int light_index)
 {
    if (Lights[light_index].SpotlightCutoffAngle >= 180.0f) return one;
 
-   vec4 direction_in_ec = 
-      transpose( inverse( ViewMatrix * WorldMatrix ) ) * 
-      vec4(Lights[light_index].SpotlightDirection, one);
+   vec4 direction_in_ec = transpose( inverse( ViewMatrix ) ) * vec4(Lights[light_index].SpotlightDirection, one);
    vec3 normalized_direction = normalize( direction_in_ec.xyz );
    float cutoff_angle = clamp( Lights[light_index].SpotlightCutoffAngle, zero, 90.0f );
    float factor = dot( -normalized_light_vector, normalized_direction );

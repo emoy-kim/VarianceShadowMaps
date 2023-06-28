@@ -9,12 +9,12 @@ public:
    struct LightLocationSet
    {
       GLint LightSwitch, LightPosition;
-      GLint LightAmbient, LightDiffuse, LightSpecular, LightAttenuationFactors;
-      GLint SpotlightDirection, SpotlightExponent, SpotlightCutoffAngle;
+      GLint LightAmbient, LightDiffuse, LightSpecular, LightFallOffRadius;
+      GLint SpotlightDirection, SpotlightCutoffAngle, SpotlightFeather;
 
       LightLocationSet() : LightSwitch( 0 ), LightPosition( 0 ), LightAmbient( 0 ), LightDiffuse( 0 ),
-      LightSpecular( 0 ), LightAttenuationFactors( 0 ), SpotlightDirection( 0 ), SpotlightExponent( 0 ),
-      SpotlightCutoffAngle( 0 ) {}
+      LightSpecular( 0 ), LightFallOffRadius( 0 ), SpotlightDirection( 0 ), SpotlightCutoffAngle( 0 ),
+      SpotlightFeather( 0 ) {}
    };
 
    struct LocationSet
@@ -134,17 +134,17 @@ public:
    {
       return Location.Lights[light_index].SpotlightDirection;
    }
-   [[nodiscard]] GLint getLightSpotlightExponentLocation(int light_index) const
-   {
-      return Location.Lights[light_index].SpotlightExponent;
-   }
    [[nodiscard]] GLint getLightSpotlightCutoffAngleLocation(int light_index) const
    {
       return Location.Lights[light_index].SpotlightCutoffAngle;
    }
-   [[nodiscard]] GLint getLightAttenuationFactorsLocation(int light_index) const
+   [[nodiscard]] GLint getLightSpotlightFeatherLocation(int light_index) const
    {
-      return Location.Lights[light_index].LightAttenuationFactors;
+      return Location.Lights[light_index].SpotlightFeather;
+   }
+   [[nodiscard]] GLint getLightFallOffRadiusLocation(int light_index) const
+   {
+      return Location.Lights[light_index].LightFallOffRadius;
    }
 
 protected:
